@@ -84,8 +84,6 @@ import java.util.ArrayList;
  * sized to fill all available space in the closed state. Weight on a pane that becomes covered
  * indicates that the pane should be sized to fill all available space except a small minimum strip
  * that the user may use to grab the slideable view and pull it back over into a closed state.</p>
- *
- * <p>Experimental. This class may be removed.</p>
  */
 public class SlidingPaneLayout extends ViewGroup {
     private static final String TAG = "SlidingPaneLayout";
@@ -1394,23 +1392,36 @@ public class SlidingPaneLayout extends ViewGroup {
         public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfoCompat info) {
             final AccessibilityNodeInfoCompat superNode = AccessibilityNodeInfoCompat.obtain(info);
             super.onInitializeAccessibilityNodeInfo(host, superNode);
+            copyNodeInfoNoChildren(info, superNode);
+            superNode.recycle();
 
+            info.setClassName(SlidingPaneLayout.class.getName());
             info.setSource(host);
+
             final ViewParent parent = ViewCompat.getParentForAccessibility(host);
             if (parent instanceof View) {
                 info.setParent((View) parent);
             }
-            copyNodeInfoNoChildren(info, superNode);
 
-            superNode.recycle();
-
+            // This is a best-approximation of addChildrenForAccessibility()
+            // that accounts for filtering.
             final int childCount = getChildCount();
             for (int i = 0; i < childCount; i++) {
                 final View child = getChildAt(i);
-                if (!filter(child)) {
+                if (!filter(child) && (child.getVisibility() == View.VISIBLE)) {
+                    // Force importance to "yes" since we can't read the value.
+                    ViewCompat.setImportantForAccessibility(
+                            child, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_YES);
                     info.addChild(child);
                 }
             }
+        }
+
+        @Override
+        public void onInitializeAccessibilityEvent(View host, AccessibilityEvent event) {
+            super.onInitializeAccessibilityEvent(host, event);
+
+            event.setClassName(SlidingPaneLayout.class.getName());
         }
 
         @Override
@@ -1455,6 +1466,8 @@ public class SlidingPaneLayout extends ViewGroup {
             dest.setLongClickable(src.isLongClickable());
 
             dest.addAction(src.getActions());
+
+            dest.setMovementGranularities(src.getMovementGranularities());
         }
     }
 
