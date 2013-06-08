@@ -221,7 +221,7 @@ public class ActionBarView extends AbsActionBarView {
         mExpandedHomeLayout.setUp(true);
         mExpandedHomeLayout.setOnClickListener(mExpandedActionViewUpListener);
         mExpandedHomeLayout.setContentDescription(getResources().getText(
-                R.string.action_bar_up_description));
+                R.string.abc_action_bar_up_description));
 
         mTitleStyleRes = a.getResourceId(R.styleable.ActionBar_titleTextStyle, 0);
         mSubtitleStyleRes = a.getResourceId(R.styleable.ActionBar_subtitleTextStyle, 0);
@@ -342,7 +342,7 @@ public class ActionBarView extends AbsActionBarView {
                 if (!splitActionBar) {
                     mActionMenuPresenter.setExpandedActionViewsExclusive(
                             getResources().getBoolean(
-                                    R.bool.action_bar_expanded_action_views_exclusive));
+                                    R.bool.abc_action_bar_expanded_action_views_exclusive));
                 } else {
                     mActionMenuPresenter.setExpandedActionViewsExclusive(false);
                     // Allow full screen width in split mode.
@@ -414,7 +414,7 @@ public class ActionBarView extends AbsActionBarView {
         if (!mSplitActionBar) {
             mActionMenuPresenter.setExpandedActionViewsExclusive(
                     getResources().getBoolean(
-                            R.bool.action_bar_expanded_action_views_exclusive));
+                            R.bool.abc_action_bar_expanded_action_views_exclusive));
             configPresenters(builder);
             menuView = (ActionMenuView) mActionMenuPresenter.getMenuView(this);
             final ViewGroup oldParent = (ViewGroup) menuView.getParent();
@@ -551,10 +551,10 @@ public class ActionBarView extends AbsActionBarView {
             mHomeLayout.setContentDescription(null);
         } else if ((mDisplayOptions & ActionBar.DISPLAY_HOME_AS_UP) != 0) {
             mHomeLayout.setContentDescription(mContext.getResources().getText(
-                    R.string.action_bar_up_description));
+                    R.string.abc_action_bar_up_description));
         } else {
             mHomeLayout.setContentDescription(mContext.getResources().getText(
-                    R.string.action_bar_home_description));
+                    R.string.abc_action_bar_home_description));
         }
     }
 
@@ -619,10 +619,10 @@ public class ActionBarView extends AbsActionBarView {
             mHomeLayout.setContentDescription(null);
         } else if ((options & ActionBar.DISPLAY_HOME_AS_UP) != 0) {
             mHomeLayout.setContentDescription(mContext.getResources().getText(
-                    R.string.action_bar_up_description));
+                    R.string.abc_action_bar_up_description));
         } else {
             mHomeLayout.setContentDescription(mContext.getResources().getText(
-                    R.string.action_bar_home_description));
+                    R.string.abc_action_bar_home_description));
         }
     }
 
@@ -1191,6 +1191,14 @@ public class ActionBarView extends AbsActionBarView {
         }
     }
 
+    public void setHomeAsUpIndicator(Drawable indicator) {
+        mHomeLayout.setUpIndicator(indicator);
+    }
+
+    public void setHomeAsUpIndicator(int resId) {
+        mHomeLayout.setUpIndicator(resId);
+    }
+
     static class SavedState extends BaseSavedState {
 
         int expandedMenuItemId;
@@ -1226,12 +1234,11 @@ public class ActionBarView extends AbsActionBarView {
     }
 
     private static class HomeView extends FrameLayout {
-
-        private View mUpView;
-
+        private ImageView mUpView;
         private ImageView mIconView;
-
         private int mUpWidth;
+        private int mUpIndicatorRes;
+        private Drawable mDefaultUpIndicator;
 
         public HomeView(Context context) {
             this(context, null);
@@ -1249,6 +1256,25 @@ public class ActionBarView extends AbsActionBarView {
             mIconView.setImageDrawable(icon);
         }
 
+        public void setUpIndicator(Drawable d) {
+            mUpView.setImageDrawable(d != null ? d : mDefaultUpIndicator);
+            mUpIndicatorRes = 0;
+        }
+
+        public void setUpIndicator(int resId) {
+            mUpIndicatorRes = resId;
+            mUpView.setImageDrawable(resId != 0 ? getResources().getDrawable(resId) : null);
+        }
+
+        @Override
+        protected void onConfigurationChanged(Configuration newConfig) {
+            super.onConfigurationChanged(newConfig);
+            if (mUpIndicatorRes != 0) {
+                // Reload for config change
+                setUpIndicator(mUpIndicatorRes);
+            }
+        }
+
         @Override
         public boolean dispatchPopulateAccessibilityEvent(AccessibilityEvent event) {
             final CharSequence cdesc = getContentDescription();
@@ -1260,8 +1286,9 @@ public class ActionBarView extends AbsActionBarView {
 
         @Override
         protected void onFinishInflate() {
-            mUpView = findViewById(R.id.up);
+            mUpView = (ImageView) findViewById(R.id.up);
             mIconView = (ImageView) findViewById(R.id.home);
+            mDefaultUpIndicator = mUpView.getDrawable();
         }
 
         public int getLeftOffset() {

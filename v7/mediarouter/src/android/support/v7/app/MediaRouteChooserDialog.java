@@ -58,7 +58,7 @@ public class MediaRouteChooserDialog extends Dialog {
     }
 
     public MediaRouteChooserDialog(Context context, int theme) {
-        super(MediaRouterThemeHelper.createThemedContext(context), theme);
+        super(MediaRouterThemeHelper.createThemedContext(context, true), theme);
         context = getContext();
 
         mRouter = MediaRouter.getInstance(context);
@@ -89,7 +89,8 @@ public class MediaRouteChooserDialog extends Dialog {
 
             if (mAttachedToWindow) {
                 mRouter.removeCallback(mCallback);
-                mRouter.addCallback(selector, mCallback);
+                mRouter.addCallback(selector, mCallback,
+                        MediaRouter.CALLBACK_FLAG_PERFORM_ACTIVE_SCAN);
             }
 
             refreshRoutes();
@@ -114,6 +115,7 @@ public class MediaRouteChooserDialog extends Dialog {
         mListView = (ListView)findViewById(R.id.media_route_list);
         mListView.setAdapter(mAdapter);
         mListView.setOnItemClickListener(mAdapter);
+        mListView.setEmptyView(findViewById(android.R.id.empty));
     }
 
     @Override
@@ -121,7 +123,7 @@ public class MediaRouteChooserDialog extends Dialog {
         super.onAttachedToWindow();
 
         mAttachedToWindow = true;
-        mRouter.addCallback(mSelector, mCallback, MediaRouter.CALLBACK_FLAG_ACTIVE_SCAN);
+        mRouter.addCallback(mSelector, mCallback, MediaRouter.CALLBACK_FLAG_PERFORM_ACTIVE_SCAN);
         refreshRoutes();
     }
 

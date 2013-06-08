@@ -31,11 +31,11 @@ import android.support.v7.media.MediaRouteProvider.ProviderMetadata;
 import android.util.Log;
 import android.view.Display;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.WeakHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Locale;
 
 /**
  * MediaRouter allows applications to control the routing of media channels
@@ -57,7 +57,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class MediaRouter {
     private static final String TAG = "MediaRouter";
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
     // Maintains global media router state for the process.
     // This field is initialized in MediaRouter.getInstance() before any
@@ -67,8 +67,7 @@ public final class MediaRouter {
 
     // Context-bound state of the media router.
     final Context mContext;
-    final CopyOnWriteArrayList<CallbackRecord> mCallbackRecords =
-            new CopyOnWriteArrayList<CallbackRecord>();
+    final ArrayList<CallbackRecord> mCallbackRecords = new ArrayList<CallbackRecord>();
 
     /**
      * Flag for {@link #addCallback}: Actively scan for routes while this callback
@@ -84,9 +83,14 @@ public final class MediaRouter {
      * effects on wireless connectivity.  Therefore it is important that active scanning
      * only be requested when it is actually needed to satisfy a user request to
      * discover and select a new route.
+     * </p><p>
+     * This flag implies {@link #CALLBACK_FLAG_REQUEST_DISCOVERY} but performing
+     * active scans is much more expensive than a normal discovery request.
      * </p>
+     *
+     * @see #CALLBACK_FLAG_REQUEST_DISCOVERY
      */
-    public static final int CALLBACK_FLAG_ACTIVE_SCAN = 1 << 0;
+    public static final int CALLBACK_FLAG_PERFORM_ACTIVE_SCAN = 1 << 0;
 
     /**
      * Flag for {@link #addCallback}: Do not filter route events.
@@ -96,6 +100,28 @@ public final class MediaRouter {
      * </p>
      */
     public static final int CALLBACK_FLAG_UNFILTERED_EVENTS = 1 << 1;
+
+    /**
+     * Flag for {@link #addCallback}: Request that route discovery be performed while this
+     * callback is registered.
+     * <p>
+     * When this flag is specified, the media router will try to discover routes.
+     * Although route discovery is intended to be efficient, checking for new routes may
+     * result in some network activity and could slowly drain the battery.  Therefore
+     * applications should only specify {@link #CALLBACK_FLAG_REQUEST_DISCOVERY} when
+     * they are running in the foreground and would like to provide the user with the
+     * option of connecting to new routes.
+     * </p><p>
+     * Applications should typically add a callback using this flag in the
+     * {@link android.app.Activity activity's} {@link android.app.Activity#onStart onStart}
+     * method and remove it in the {@link android.app.Activity#onStop onStop} method.
+     * The {@link android.support.v7.app.MediaRouteDiscoveryFragment} fragment may
+     * also be used for this purpose.
+     * </p>
+     *
+     * @see android.support.v7.app.MediaRouteDiscoveryFragment
+     */
+    public static final int CALLBACK_FLAG_REQUEST_DISCOVERY = 1 << 2;
 
     /**
      * Flag for {@link #isRouteAvailable}: Ignore the default route.
@@ -108,27 +134,26 @@ public final class MediaRouter {
      */
     public static final int AVAILABILITY_FLAG_IGNORE_DEFAULT_ROUTE = 1 << 0;
 
-    /**
-     * Flag for {@link #isRouteAvailable}: Consider whether matching routes
-     * might be discovered if an active scan were performed.
-     * <p>
-     * If no existing routes match the route selector, then this flag is used to
-     * determine whether to consider whether any route providers that require active
-     * scans might discover matching routes if an active scan were actually performed.
-     * </p><p>
-     * This flag may be used to decide whether to offer the route chooser dialog to the user.
-     * When the dialog is opened, an active scan will be performed which may cause
-     * additional routes to be discovered by any providers that require active scans.
-     * </p>
-     */
-    public static final int AVAILABILITY_FLAG_CONSIDER_ACTIVE_SCAN = 1 << 1;
-
     MediaRouter(Context context) {
         mContext = context;
     }
 
     /**
-     * Gets an instance of the media router service from the context.
+     * Gets an instance of the media router service associated with the context.
+     * <p>
+     * The application is responsible for holding a strong reference to the returned
+     * {@link MediaRouter} instance, such as by storing the instance in a field of
+     * the {@link android.app.Activity}, to ensure that the media router remains alive
+     * as long as the application is using its features.
+     * </p><p>
+     * In other words, the support library only holds a {@link WeakReference weak reference}
+     * to each media router instance.  When there are no remaining strong references to the
+     * media router instance, all of its callbacks will be removed and route discovery
+     * will no longer be performed on its behalf.
+     * </p>
+     *
+     * @return The media router instance for the context.  The application must hold
+     * a strong reference to this object as long as it is in use.
      */
     public static MediaRouter getInstance(Context context) {
         if (context == null) {
@@ -271,21 +296,17 @@ public final class MediaRouter {
     }
 
     /**
-     * Returns true if there is a route that matches the specified selector
-     * or, depending on the specified availability flags, if it is possible to discover one.
+     * Returns true if there is a route that matches the specified selector.
      * <p>
-     * This method first considers whether there are any available
-     * routes that match the selector regardless of whether they are enabled or
-     * disabled.  If not and the {@link #AVAILABILITY_FLAG_CONSIDER_ACTIVE_SCAN} flag
-     * was specifies, then it considers whether any of the route providers
-     * could discover a matching route if an active scan were performed.
+     * This method returns true if there are any available routes that match the selector
+     * regardless of whether they are enabled or disabled.  If the
+     * {@link #AVAILABILITY_FLAG_IGNORE_DEFAULT_ROUTE} flag is specified, then
+     * the method will only consider non-default routes.
      * </p>
      *
      * @param selector The selector to match.
      * @param flags Flags to control the determination of whether a route may be available.
-     * May be zero or a combination of
-     * {@link #AVAILABILITY_FLAG_IGNORE_DEFAULT_ROUTE} and
-     * {@link #AVAILABILITY_FLAG_CONSIDER_ACTIVE_SCAN}.
+     * May be zero or {@link #AVAILABILITY_FLAG_IGNORE_DEFAULT_ROUTE}.
      * @return True if a matching route may be available.
      */
     public boolean isRouteAvailable(MediaRouteSelector selector, int flags) {
@@ -351,21 +372,22 @@ public final class MediaRouter {
      *                 .build();
      *     }
      *
-     *     // Add the callback on resume to tell the media router what kinds of routes
+     *     // Add the callback on start to tell the media router what kinds of routes
      *     // the application is interested in so that it can try to discover suitable ones.
-     *     public void onResume() {
-     *         super.onResume();
+     *     public void onStart() {
+     *         super.onStart();
      *
-     *         mediaRouter.addCallback(mSelector, mCallback);
+     *         mediaRouter.addCallback(mSelector, mCallback,
+     *                 MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY);
      *
      *         MediaRouter.RouteInfo route = mediaRouter.updateSelectedRoute(mSelector);
      *         // do something with the route...
      *     }
      *
-     *     // Remove the selector on pause to tell the media router that it no longer
+     *     // Remove the selector on stop to tell the media router that it no longer
      *     // needs to invest effort trying to discover routes of these kinds for now.
-     *     public void onPause() {
-     *         super.onPause();
+     *     public void onStop() {
+     *         super.onStop();
      *
      *         mediaRouter.removeCallback(mCallback);
      *     }
@@ -380,7 +402,7 @@ public final class MediaRouter {
      * callback would like to discover.
      * @param callback The callback to add.
      * @param flags Flags to control the behavior of the callback.
-     * May be zero or a combination of {@link #CALLBACK_FLAG_ACTIVE_SCAN} and
+     * May be zero or a combination of {@link #CALLBACK_FLAG_PERFORM_ACTIVE_SCAN} and
      * {@link #CALLBACK_FLAG_UNFILTERED_EVENTS}.
      * @see #removeCallback
      */
@@ -401,7 +423,7 @@ public final class MediaRouter {
         CallbackRecord record;
         int index = findCallbackRecord(callback);
         if (index < 0) {
-            record = new CallbackRecord(callback);
+            record = new CallbackRecord(this, callback);
             mCallbackRecords.add(record);
         } else {
             record = mCallbackRecords.get(index);
@@ -457,7 +479,11 @@ public final class MediaRouter {
     }
 
     /**
-     * Registers a media route provider globally for this application process.
+     * Registers a media route provider within this application process.
+     * <p>
+     * The provider will be added to the list of providers that all {@link MediaRouter}
+     * instances within this process can use to discover routes.
+     * </p>
      *
      * @param providerInstance The media route provider instance to add.
      *
@@ -477,7 +503,11 @@ public final class MediaRouter {
     }
 
     /**
-     * Unregisters a media route provider globally for this application process.
+     * Unregisters a media route provider within this application process.
+     * <p>
+     * The provider will be removed from the list of providers that all {@link MediaRouter}
+     * instances within this process can use to discover routes.
+     * </p>
      *
      * @param providerInstance The media route provider instance to remove.
      *
@@ -522,6 +552,7 @@ public final class MediaRouter {
     public static final class RouteInfo {
         private final ProviderInfo mProvider;
         private final String mDescriptorId;
+        private final String mUniqueId;
         private String mName;
         private String mDescription;
         private boolean mEnabled;
@@ -576,9 +607,10 @@ public final class MediaRouter {
         static final int CHANGE_VOLUME = 1 << 1;
         static final int CHANGE_PRESENTATION_DISPLAY = 1 << 2;
 
-        RouteInfo(ProviderInfo provider, String descriptorId) {
+        RouteInfo(ProviderInfo provider, String descriptorId, String uniqueId) {
             mProvider = provider;
             mDescriptorId = descriptorId;
+            mUniqueId = uniqueId;
         }
 
         /**
@@ -586,6 +618,20 @@ public final class MediaRouter {
          */
         public ProviderInfo getProvider() {
             return mProvider;
+        }
+
+        /**
+         * Gets the unique id of the route.
+         * <p>
+         * The route unique id functions as a stable identifier by which the route is known.
+         * For example, an application can use this id as a token to remember the
+         * selected route across restarts or to communicate its identity to a service.
+         * </p>
+         *
+         * @return The unique id of the route, never null.
+         */
+        public String getId() {
+            return mUniqueId;
         }
 
         /**
@@ -913,7 +959,8 @@ public final class MediaRouter {
 
         @Override
         public String toString() {
-            return "MediaRouter.RouteInfo{ name=" + mName
+            return "MediaRouter.RouteInfo{ uniqueId=" + mUniqueId
+                    + ", name=" + mName
                     + ", description=" + mDescription
                     + ", enabled=" + mEnabled
                     + ", connecting=" + mConnecting
@@ -1007,8 +1054,6 @@ public final class MediaRouter {
     public static final class ProviderInfo {
         private final MediaRouteProvider mProviderInstance;
         private final ArrayList<RouteInfo> mRoutes = new ArrayList<RouteInfo>();
-        private final ArrayList<IntentFilter> mDiscoverableControlFilters =
-                new ArrayList<IntentFilter>();
 
         private final ProviderMetadata mMetadata;
         private MediaRouteProviderDescriptor mDescriptor;
@@ -1043,40 +1088,6 @@ public final class MediaRouter {
             return mRoutes;
         }
 
-        /**
-         * Returns true if the provider requires active scans to discover routes.
-         * <p>
-         * To provide the best user experience, a media route provider should passively
-         * discover and publish changes to route descriptors in the background.
-         * However, for some providers, scanning for routes may use a significant
-         * amount of power or may interfere with wireless network connectivity.
-         * If this is the case, then the provider will indicate that it requires
-         * active scans to discover routes by setting this flag.  Active scans
-         * will be performed when the user opens the route chooser dialog.
-         * </p>
-         */
-        public boolean isActiveScanRequired() {
-            checkCallingThread();
-            return mDescriptor != null && mDescriptor.isActiveScanRequired();
-        }
-
-        /**
-         * Gets a list of {@link MediaControlIntent media route control filters} that
-         * describe the union of capabilities of all routes that this provider can
-         * possibly discover.
-         * <p>
-         * Because a route provider may not know what to look for until an
-         * application actually asks for it, the contents of the discoverable control
-         * filter list may change depending on the route selectors that applications have
-         * actually specified when {@link MediaRouter#addCallback registering callbacks}
-         * on the media router to discover routes.
-         * </p>
-         */
-        public List<IntentFilter> getDiscoverableControlFilters() {
-            checkCallingThread();
-            return mDiscoverableControlFilters;
-        }
-
         Resources getResources() {
             if (mResources == null && !mResourcesNotAvailable) {
                 String packageName = getPackageName();
@@ -1095,14 +1106,6 @@ public final class MediaRouter {
         boolean updateDescriptor(MediaRouteProviderDescriptor descriptor) {
             if (mDescriptor != descriptor) {
                 mDescriptor = descriptor;
-                if (descriptor != null) {
-                    if (!mDiscoverableControlFilters.equals(
-                            descriptor.getDiscoverableControlFilters())) {
-                        mDiscoverableControlFilters.clear();
-                        mDiscoverableControlFilters.addAll(
-                                descriptor.getDiscoverableControlFilters());
-                    }
-                }
                 return true;
             }
             return false;
@@ -1121,7 +1124,6 @@ public final class MediaRouter {
         @Override
         public String toString() {
             return "MediaRouter.RouteProviderInfo{ packageName=" + getPackageName()
-                    + ", isActiveScanRequired=" + isActiveScanRequired()
                     + " }";
         }
     }
@@ -1264,11 +1266,13 @@ public final class MediaRouter {
     }
 
     private static final class CallbackRecord {
+        public final MediaRouter mRouter;
         public final Callback mCallback;
         public MediaRouteSelector mSelector;
         public int mFlags;
 
-        public CallbackRecord(Callback callback) {
+        public CallbackRecord(MediaRouter router, Callback callback) {
+            mRouter = router;
             mCallback = callback;
             mSelector = MediaRouteSelector.EMPTY;
         }
@@ -1289,8 +1293,8 @@ public final class MediaRouter {
     private static final class GlobalMediaRouter implements SystemMediaRouteProvider.SyncCallback {
         private final Context mApplicationContext;
         private final MediaRouter mApplicationRouter;
-        private final WeakHashMap<Context, MediaRouter> mRouters =
-                new WeakHashMap<Context, MediaRouter>();
+        private final ArrayList<WeakReference<MediaRouter>> mRouters =
+                new ArrayList<WeakReference<MediaRouter>>();
         private final ArrayList<RouteInfo> mRoutes = new ArrayList<RouteInfo>();
         private final ArrayList<ProviderInfo> mProviders =
                 new ArrayList<ProviderInfo>();
@@ -1326,11 +1330,17 @@ public final class MediaRouter {
         }
 
         public MediaRouter getRouter(Context context) {
-            MediaRouter router = mRouters.get(context);
-            if (router == null) {
-                router = new MediaRouter(context);
-                mRouters.put(context, router);
+            MediaRouter router;
+            for (int i = mRouters.size(); --i >= 0; ) {
+                router = mRouters.get(i).get();
+                if (router == null) {
+                    mRouters.remove(i);
+                } else if (router.mContext == context) {
+                    return router;
+                }
             }
+            router = new MediaRouter(context);
+            mRouters.add(new WeakReference<MediaRouter>(router));
             return router;
         }
 
@@ -1435,38 +1445,35 @@ public final class MediaRouter {
                 }
             }
 
-            // Check whether any provider could possibly discover a matching route
-            // if a required active scan were performed.
-            if ((flags & AVAILABILITY_FLAG_CONSIDER_ACTIVE_SCAN) != 0) {
-                final int providerCount = mProviders.size();
-                for (int i = 0; i < providerCount; i++) {
-                    ProviderInfo provider = mProviders.get(i);
-                    if (provider.isActiveScanRequired() && selector.matchesControlFilters(
-                            provider.getDiscoverableControlFilters())) {
-                        return true;
-                    }
-                }
-            }
-
             // It doesn't look like we can find a matching route right now.
             return false;
         }
 
         public void updateDiscoveryRequest() {
             // Combine all of the callback selectors and active scan flags.
+            boolean discover = false;
             boolean activeScan = false;
             MediaRouteSelector.Builder builder = new MediaRouteSelector.Builder();
-            for (MediaRouter router : mRouters.values()) {
-                final int count = router.mCallbackRecords.size();
-                for (int i = 0; i < count; i++) {
-                    CallbackRecord callback = router.mCallbackRecords.get(i);
-                    builder.addSelector(callback.mSelector);
-                    if ((callback.mFlags & CALLBACK_FLAG_ACTIVE_SCAN) != 0) {
-                        activeScan = true;
+            for (int i = mRouters.size(); --i >= 0; ) {
+                MediaRouter router = mRouters.get(i).get();
+                if (router == null) {
+                    mRouters.remove(i);
+                } else {
+                    final int count = router.mCallbackRecords.size();
+                    for (int j = 0; j < count; j++) {
+                        CallbackRecord callback = router.mCallbackRecords.get(j);
+                        builder.addSelector(callback.mSelector);
+                        if ((callback.mFlags & CALLBACK_FLAG_PERFORM_ACTIVE_SCAN) != 0) {
+                            activeScan = true;
+                            discover = true; // perform active scan implies request discovery
+                        }
+                        if ((callback.mFlags & CALLBACK_FLAG_REQUEST_DISCOVERY) != 0) {
+                            discover = true;
+                        }
                     }
                 }
             }
-            MediaRouteSelector selector = builder.build();
+            MediaRouteSelector selector = discover ? builder.build() : MediaRouteSelector.EMPTY;
 
             // Create a new discovery request.
             if (mDiscoveryRequest != null
@@ -1570,7 +1577,8 @@ public final class MediaRouter {
                             final int sourceIndex = provider.findRouteByDescriptorId(id);
                             if (sourceIndex < 0) {
                                 // 1. Add the route to the list.
-                                RouteInfo route = new RouteInfo(provider, id);
+                                String uniqueId = assignRouteUniqueId(provider, id);
+                                RouteInfo route = new RouteInfo(provider, id, uniqueId);
                                 provider.mRoutes.add(targetIndex++, route);
                                 mRoutes.add(route);
                                 // 2. Create the route's contents.
@@ -1648,6 +1656,32 @@ public final class MediaRouter {
                 // Choose a new selected route if needed.
                 selectRouteIfNeeded();
             }
+        }
+
+        private String assignRouteUniqueId(ProviderInfo provider, String routeDescriptorId) {
+            // Although route descriptor ids are unique within a provider, it's
+            // possible for there to be two providers with the same package name.
+            // Therefore we must dedupe the composite id.
+            String uniqueId = provider.getPackageName() + ":" + routeDescriptorId;
+            if (findRouteByUniqueId(uniqueId) < 0) {
+                return uniqueId;
+            }
+            for (int i = 2; ; i++) {
+                String newUniqueId = String.format(Locale.US, "%s_%d", uniqueId, i);
+                if (findRouteByUniqueId(newUniqueId) < 0) {
+                    return newUniqueId;
+                }
+            }
+        }
+
+        private int findRouteByUniqueId(String uniqueId) {
+            final int count = mRoutes.size();
+            for (int i = 0; i < count; i++) {
+                if (mRoutes.get(i).mUniqueId.equals(uniqueId)) {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         private void unselectRouteIfNeeded(RouteInfo route) {
@@ -1741,8 +1775,8 @@ public final class MediaRouter {
         }
 
         private final class CallbackHandler extends Handler {
-            private final ArrayList<MediaRouter> mTempMediaRouters =
-                    new ArrayList<MediaRouter>();
+            private final ArrayList<CallbackRecord> mTempCallbackRecords =
+                    new ArrayList<CallbackRecord>();
 
             private static final int MSG_TYPE_MASK = 0xff00;
             private static final int MSG_TYPE_ROUTE = 0x0100;
@@ -1773,19 +1807,24 @@ public final class MediaRouter {
                 syncWithSystemProvider(what, obj);
 
                 // Invoke all registered callbacks.
-                mTempMediaRouters.addAll(mRouters.values());
+                // Build a list of callbacks before invoking them in case callbacks
+                // are added or removed during dispatch.
                 try {
-                    final int routerCount = mTempMediaRouters.size();
-                    for (int i = 0; i < routerCount; i++) {
-                        final MediaRouter router = mTempMediaRouters.get(i);
-                        if (!router.mCallbackRecords.isEmpty()) {
-                            for (CallbackRecord record : router.mCallbackRecords) {
-                                invokeCallback(router, record, what, obj);
-                            }
+                    for (int i = mRouters.size(); --i >= 0; ) {
+                        MediaRouter router = mRouters.get(i).get();
+                        if (router == null) {
+                            mRouters.remove(i);
+                        } else {
+                            mTempCallbackRecords.addAll(router.mCallbackRecords);
                         }
                     }
+
+                    final int callbackCount = mTempCallbackRecords.size();
+                    for (int i = 0; i < callbackCount; i++) {
+                        invokeCallback(mTempCallbackRecords.get(i), what, obj);
+                    }
                 } finally {
-                    mTempMediaRouters.clear();
+                    mTempCallbackRecords.clear();
                 }
             }
 
@@ -1806,8 +1845,8 @@ public final class MediaRouter {
                 }
             }
 
-            private void invokeCallback(MediaRouter router, CallbackRecord record,
-                    int what, Object obj) {
+            private void invokeCallback(CallbackRecord record, int what, Object obj) {
+                final MediaRouter router = record.mRouter;
                 final MediaRouter.Callback callback = record.mCallback;
                 switch (what & MSG_TYPE_MASK) {
                     case MSG_TYPE_ROUTE: {
