@@ -82,8 +82,15 @@ public final class MediaItemStatus {
     /**
      * Playback state: Paused.
      * <p>
-     * Indicates that the media item has been paused.  Playback can be
-     * resumed playback by sending {@link MediaControlIntent#ACTION_RESUME}.
+     * Indicates that playback of the media item has been paused because the
+     * queue was paused.  Playback can be resumed playback by sending
+     * {@link MediaControlIntent#ACTION_RESUME_QUEUE} to resume playback of the queue.
+     * </p><p>
+     * Only the media item at the head of the queue enters the paused state when the
+     * queue is paused because that is the media item that would otherwise have been
+     * {@link #PLAYBACK_STATE_PLAYING playing}; other media items in the queue remain
+     * in the {@link #PLAYBACK_STATE_QUEUED queued} state until the head item
+     * finishes playing or is removed from the queue.
      * </p>
      */
     public static final int PLAYBACK_STATE_PAUSED = 2;
@@ -115,8 +122,9 @@ public final class MediaItemStatus {
      * Playback state: Canceled.
      * <p>
      * Indicates that the media item was canceled permanently.  This may
-     * happen because a new media item was queued which caused this media item
-     * to be stopped and removed from the queue.
+     * happen because the media item was removed from the queue, the queue was
+     * cleared by the application, or the queue was invalidated by another playback
+     * request that resulted in the creation of a new queue.
      * </p><p>
      * A canceled media item cannot be resumed.  To play the content again, the application
      * must send a new {@link MediaControlIntent#ACTION_PLAY} action to enqueue
@@ -166,23 +174,23 @@ public final class MediaItemStatus {
     }
 
     /**
-     * Gets the content playback position as a floating point number of seconds
+     * Gets the content playback position as a long integer number of milliseconds
      * from the beginning of the content.
      *
-     * @return The content playback position in seconds, or -1 if unknown.
+     * @return The content playback position in milliseconds, or -1 if unknown.
      */
-    public double getContentPosition() {
-        return mBundle.getDouble(KEY_CONTENT_POSITION, -1);
+    public long getContentPosition() {
+        return mBundle.getLong(KEY_CONTENT_POSITION, -1);
     }
 
     /**
-     * Gets the total duration of the content to be played as a floating point number
-     * of seconds.
+     * Gets the total duration of the content to be played as a long integer number of
+     * milliseconds.
      *
-     * @return The content duration in seconds, or -1 if unknown.
+     * @return The content duration in milliseconds, or -1 if unknown.
      */
-    public double getContentDuration() {
-        return mBundle.getDouble(KEY_CONTENT_DURATION, -1);
+    public long getContentDuration() {
+        return mBundle.getLong(KEY_CONTENT_DURATION, -1);
     }
 
     /**
@@ -294,20 +302,20 @@ public final class MediaItemStatus {
         }
 
         /**
-         * Sets the content playback position as a floating point number of seconds
+         * Sets the content playback position as a long integer number of milliseconds
          * from the beginning of the content.
          */
-        public Builder setContentPosition(double positionSeconds) {
-            mBundle.putDouble(KEY_CONTENT_POSITION, positionSeconds);
+        public Builder setContentPosition(long positionMilliseconds) {
+            mBundle.putLong(KEY_CONTENT_POSITION, positionMilliseconds);
             return this;
         }
 
         /**
-         * Sets the total duration of the content to be played as a floating point number
-         * of seconds.
+         * Sets the total duration of the content to be played as a long integer number
+         * of milliseconds.
          */
-        public Builder setContentDuration(double durationSeconds) {
-            mBundle.putDouble(KEY_CONTENT_DURATION, durationSeconds);
+        public Builder setContentDuration(long durationMilliseconds) {
+            mBundle.putLong(KEY_CONTENT_DURATION, durationMilliseconds);
             return this;
         }
 
