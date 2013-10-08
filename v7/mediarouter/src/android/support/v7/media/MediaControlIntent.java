@@ -335,24 +335,6 @@ public final class MediaControlIntent {
      * class documentation.
      * </p>
      *
-     * <h3>Queuing</h3>
-     * <p>
-     * This request has the effect of implicitly creating a media queue whenever the
-     * application does not specify the {@link #EXTRA_QUEUE_ID} parameter.  Because there
-     * can only be one valid queue at a time, creating a new queue has the side-effect
-     * of invalidating any existing queues and canceling all of their items before
-     * enqueuing the new playback request media item onto the newly created queue.
-     * </p><p>
-     * If the application specifies an invalid queue id, then the request has no effect
-     * and an error is returned.  The application may then ask that a new queue be
-     * created (and the current one invalidated) by issuing a new playback request without
-     * a queue id parameter.  However, it should only do this at the user's request
-     * (say, by the user explicitly clicking a play button) since another application may
-     * be trying to take control of the route.
-     * </p><p>
-     * For more information on queuing, please refer to the class documentation.
-     * </p>
-     *
      * <h3>Request parameters</h3>
      * <ul>
      * <li>{@link #EXTRA_SESSION_ID} <em>(optional)</em>: Specifies the session id of the
@@ -427,7 +409,6 @@ public final class MediaControlIntent {
      *
      * @see MediaRouter.RouteInfo#sendControlRequest
      * @see #CATEGORY_REMOTE_PLAYBACK
-     * @see #ACTION_CANCEL
      * @see #ACTION_SEEK
      * @see #ACTION_GET_STATUS
      * @see #ACTION_PAUSE
@@ -508,7 +489,7 @@ public final class MediaControlIntent {
      * @see MediaRouter.RouteInfo#sendControlRequest
      * @see #CATEGORY_REMOTE_PLAYBACK
      */
-    public static final String ACTION_CANCEL = "android.media.intent.action.CANCEL";
+    public static final String ACTION_SEEK = "android.media.intent.action.SEEK";
 
     /**
      * Remote playback media control action: Get media item playback status
