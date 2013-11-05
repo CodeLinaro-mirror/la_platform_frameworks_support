@@ -241,10 +241,11 @@ public class PagerTabStrip extends PagerTitleStrip {
                 break;
 
             case MotionEvent.ACTION_UP:
+                final boolean isLayoutRtl = ViewCompat.isLayoutRtl(this);
                 if (x < mCurrText.getLeft() - mTabPadding) {
-                    mPager.setCurrentItem(mPager.getCurrentItem() - 1);
+                    mPager.setCurrentItem(mPager.getCurrentItem() + (isLayoutRtl ? +1 : -1));
                 } else if (x > mCurrText.getRight() + mTabPadding) {
-                    mPager.setCurrentItem(mPager.getCurrentItem() + 1);
+                    mPager.setCurrentItem(mPager.getCurrentItem() + (isLayoutRtl ? -1 : +1));
                 }
                 break;
         }

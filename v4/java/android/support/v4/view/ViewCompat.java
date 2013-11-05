@@ -878,6 +878,16 @@ public class ViewCompat {
     }
 
     /**
+     * Indicates whether the view has a RTL layout direction.
+     *
+     * @param v View to check for layout direction
+     * @return true if the view has RTL layout
+     */
+    public static boolean isLayoutRtl(View v) {
+        return IMPL.getLayoutDirection(v) == LAYOUT_DIRECTION_RTL;
+    }
+
+    /**
      * Set the layout direction for this view. This will propagate a reset of layout direction
      * resolution to the view's children and resolve layout direction for this view.
      *
