@@ -58,10 +58,14 @@ public class AccessibilityNodeProviderCompat {
                             List<AccessibilityNodeInfoCompat> compatInfos =
                                 compat.findAccessibilityNodeInfosByText(text, virtualViewId);
                             List<Object> infos = new ArrayList<Object>();
-                            final int infoCount = compatInfos.size();
-                            for (int i = 0; i < infoCount; i++) {
-                                AccessibilityNodeInfoCompat infoCompat = compatInfos.get(i);
-                                infos.add(infoCompat.getInfo());
+                            if (null == compatInfos) {
+                                return null;
+                            } else {
+                                final int infoCount = compatInfos.size();
+                                for (int i = 0; i < infoCount; i++) {
+                                    AccessibilityNodeInfoCompat infoCompat = compatInfos.get(i);
+                                    infos.add(infoCompat.getInfo());
+                                }
                             }
                             return infos;
                         }
@@ -99,10 +103,14 @@ public class AccessibilityNodeProviderCompat {
                             List<AccessibilityNodeInfoCompat> compatInfos =
                                     compat.findAccessibilityNodeInfosByText(text, virtualViewId);
                             List<Object> infos = new ArrayList<Object>();
-                            final int infoCount = compatInfos.size();
-                            for (int i = 0; i < infoCount; i++) {
-                                AccessibilityNodeInfoCompat infoCompat = compatInfos.get(i);
-                                infos.add(infoCompat.getInfo());
+                            if (null == compatInfos) {
+                                return null;
+                            } else {
+                                final int infoCount = compatInfos.size();
+                                for (int i = 0; i < infoCount; i++) {
+                                    AccessibilityNodeInfoCompat infoCompat = compatInfos.get(i);
+                                    infos.add(infoCompat.getInfo());
+                                }
                             }
                             return infos;
                         }
