@@ -1,4 +1,3 @@
-
 /*
  * Copyright (C) 2014 The Android Open Source Project
  *
@@ -19,7 +18,6 @@ package android.support.v4.media.session;
 
 import static android.support.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -53,7 +51,6 @@ import android.support.v4.media.MediaDescriptionCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.RatingCompat;
 import android.support.v4.media.VolumeProviderCompat;
-import android.support.v4.os.BuildCompat;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.TypedValue;
@@ -90,6 +87,12 @@ import java.util.List;
  * This is a helper for accessing features in
  * {@link android.media.session.MediaSession} introduced after API level 4 in a
  * backwards compatible fashion.
+ *
+ * <div class="special reference">
+ * <h3>Developer Guides</h3>
+ * <p>For information about building your media application, read the
+ * <a href="{@docRoot}guide/topics/media-apps/index.html">Media Apps</a> developer guide.</p>
+ * </div>
  */
 public class MediaSessionCompat {
     static final String TAG = "MediaSessionCompat";
@@ -308,10 +311,8 @@ public class MediaSessionCompat {
         }
         if (android.os.Build.VERSION.SDK_INT >= 21) {
             mImpl = new MediaSessionImplApi21(context, tag);
-            if (!isAtLeastO()) {
-                // Set default callback to respond to controllers' extra binder requests.
-                setCallback(new Callback() {});
-            }
+            // Set default callback to respond to controllers' extra binder requests.
+            setCallback(new Callback() {});
             mImpl.setMediaButtonReceiver(mbrIntent);
         } else if (android.os.Build.VERSION.SDK_INT >= 19) {
             mImpl = new MediaSessionImplApi19(context, tag, mbrComponent, mbrIntent);
@@ -330,7 +331,7 @@ public class MediaSessionCompat {
 
     private MediaSessionCompat(Context context, MediaSessionImpl impl) {
         mImpl = impl;
-        if (android.os.Build.VERSION.SDK_INT >= 21 && !isAtLeastO()) {
+        if (android.os.Build.VERSION.SDK_INT >= 21) {
             // Set default callback to respond to controllers' extra binder requests.
             setCallback(new Callback() {});
         }
@@ -711,8 +712,37 @@ public class MediaSessionCompat {
         return null;
     }
 
-    static boolean isAtLeastO() {
-        return BuildCompat.isAtLeastO() || android.os.Build.VERSION.SDK_INT >= 26;
+    private static PlaybackStateCompat getStateWithUpdatedPosition(
+            PlaybackStateCompat state, MediaMetadataCompat metadata) {
+        if (state == null || state.getPosition() == PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN) {
+            return state;
+        }
+
+        if (state.getState() == PlaybackStateCompat.STATE_PLAYING
+                || state.getState() == PlaybackStateCompat.STATE_FAST_FORWARDING
+                || state.getState() == PlaybackStateCompat.STATE_REWINDING) {
+            long updateTime = state.getLastPositionUpdateTime();
+            if (updateTime > 0) {
+                long currentTime = SystemClock.elapsedRealtime();
+                long position = (long) (state.getPlaybackSpeed() * (currentTime - updateTime))
+                        + state.getPosition();
+                long duration = -1;
+                if (metadata != null && metadata.containsKey(
+                        MediaMetadataCompat.METADATA_KEY_DURATION)) {
+                    duration = metadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION);
+                }
+
+                if (duration >= 0 && position > duration) {
+                    position = duration;
+                } else if (position < 0) {
+                    position = 0;
+                }
+                return new PlaybackStateCompat.Builder(state)
+                        .setState(state.getState(), position, state.getPlaybackSpeed(), currentTime)
+                        .build();
+            }
+        }
+        return state;
     }
 
     /**
@@ -723,11 +753,8 @@ public class MediaSessionCompat {
         final Object mCallbackObj;
         WeakReference<MediaSessionImpl> mSessionImpl;
 
-        @SuppressLint("NewApi")
         public Callback() {
-            if (isAtLeastO()) {
-                mCallbackObj = MediaSessionCompatApi26.createCallback(new StubApi26());
-            } else if (android.os.Build.VERSION.SDK_INT >= 24) {
+            if (android.os.Build.VERSION.SDK_INT >= 24) {
                 mCallbackObj = MediaSessionCompatApi24.createCallback(new StubApi24());
             } else if (android.os.Build.VERSION.SDK_INT >= 23) {
                 mCallbackObj = MediaSessionCompatApi23.createCallback(new StubApi23());
@@ -979,7 +1006,9 @@ public class MediaSessionCompat {
          * specified position in the play queue.
          *
          * @param index The index of the element to be removed.
+         * @deprecated {@link #onRemoveQueueItem} will be called instead.
          */
+        @Deprecated
         public void onRemoveQueueItemAt(int index) {
         }
 
@@ -1017,8 +1046,15 @@ public class MediaSessionCompat {
                             (MediaDescriptionCompat) extras.getParcelable(
                                     MediaControllerCompat.COMMAND_ARGUMENT_MEDIA_DESCRIPTION));
                 } else if (command.equals(MediaControllerCompat.COMMAND_REMOVE_QUEUE_ITEM_AT)) {
-                    Callback.this.onRemoveQueueItemAt(
-                            extras.getInt(MediaControllerCompat.COMMAND_ARGUMENT_INDEX));
+                    MediaSessionImplApi21 impl = (MediaSessionImplApi21) mSessionImpl.get();
+                    if (impl != null && impl.mQueue != null) {
+                        int index = extras.getInt(MediaControllerCompat.COMMAND_ARGUMENT_INDEX, -1);
+                        QueueItem item = (index >= 0 && index < impl.mQueue.size())
+                                ? impl.mQueue.get(index) : null;
+                        if (item != null) {
+                            Callback.this.onRemoveQueueItem(item.getDescription());
+                        }
+                    }
                 } else {
                     Callback.this.onCommand(command, extras, cb);
                 }
@@ -1160,42 +1196,6 @@ public class MediaSessionCompat {
             @Override
             public void onPrepareFromUri(Uri uri, Bundle extras) {
                 Callback.this.onPrepareFromUri(uri, extras);
-            }
-        }
-
-        @RequiresApi(26)
-        private class StubApi26 extends StubApi24 implements MediaSessionCompatApi26.Callback {
-            @Override
-            public void onSetRepeatMode(int repeatMode) {
-                Callback.this.onSetRepeatMode(repeatMode);
-            }
-
-            @Override
-            public void onSetShuffleModeEnabled(boolean enabled) {
-                Callback.this.onSetShuffleModeEnabled(enabled);
-            }
-
-            @Override
-            public void onAddQueueItem(Object descriptionObject) {
-                Callback.this.onAddQueueItem(
-                        MediaDescriptionCompat.fromMediaDescription(descriptionObject));
-            }
-
-            @Override
-            public void onAddQueueItem(Object descriptionObject, int index) {
-                Callback.this.onAddQueueItem(
-                        MediaDescriptionCompat.fromMediaDescription(descriptionObject), index);
-            }
-
-            @Override
-            public void onRemoveQueueItem(Object descriptionObject) {
-                Callback.this.onRemoveQueueItem(
-                        MediaDescriptionCompat.fromMediaDescription(descriptionObject));
-            }
-
-            @Override
-            public void onRemoveQueueItemAt(int index) {
-                Callback.this.onRemoveQueueItemAt(index);
             }
         }
     }
@@ -1843,8 +1843,7 @@ public class MediaSessionCompat {
         @Override
         public void setMetadata(MediaMetadataCompat metadata) {
             if (metadata != null) {
-                // Clones the given {@link MediaMetadataCompat}, deep-copying bitmaps in the
-                // metadata if necessary. Bitmaps can be scaled down if they are large.
+                // Clones {@link MediaMetadataCompat} and scales down bitmaps if they are large.
                 metadata = new MediaMetadataCompat.Builder(metadata, sMaxBitmapSize).build();
             }
 
@@ -1868,10 +1867,18 @@ public class MediaSessionCompat {
             }
             if (metadata.containsKey(MediaMetadataCompat.METADATA_KEY_ART)) {
                 Bitmap art = metadata.getParcelable(MediaMetadataCompat.METADATA_KEY_ART);
+                if (art != null) {
+                    // Clone the bitmap to prevent it from being recycled by RCC.
+                    art = art.copy(art.getConfig(), false);
+                }
                 editor.putBitmap(RemoteControlClient.MetadataEditor.BITMAP_KEY_ARTWORK, art);
             } else if (metadata.containsKey(MediaMetadataCompat.METADATA_KEY_ALBUM_ART)) {
                 // Fall back to album art if the track art wasn't available
                 Bitmap art = metadata.getParcelable(MediaMetadataCompat.METADATA_KEY_ALBUM_ART);
+                if (art != null) {
+                    // Clone the bitmap to prevent it from being recycled by RCC.
+                    art = art.copy(art.getConfig(), false);
+                }
                 editor.putBitmap(RemoteControlClient.MetadataEditor.BITMAP_KEY_ARTWORK, art);
             }
             if (metadata.containsKey(MediaMetadataCompat.METADATA_KEY_ALBUM)) {
@@ -2077,43 +2084,6 @@ public class MediaSessionCompat {
             } else {
                 mAudioManager.setStreamVolume(mLocalStream, value, flags);
             }
-        }
-
-        PlaybackStateCompat getStateWithUpdatedPosition() {
-            PlaybackStateCompat state;
-            long duration = -1;
-            synchronized (mLock) {
-                state = mState;
-                if (mMetadata != null
-                        && mMetadata.containsKey(MediaMetadataCompat.METADATA_KEY_DURATION)) {
-                    duration = mMetadata.getLong(MediaMetadataCompat.METADATA_KEY_DURATION);
-                }
-            }
-
-            PlaybackStateCompat result = null;
-            if (state != null) {
-                if (state.getState() == PlaybackStateCompat.STATE_PLAYING
-                        || state.getState() == PlaybackStateCompat.STATE_FAST_FORWARDING
-                        || state.getState() == PlaybackStateCompat.STATE_REWINDING) {
-                    long updateTime = state.getLastPositionUpdateTime();
-                    long currentTime = SystemClock.elapsedRealtime();
-                    if (updateTime > 0) {
-                        long position = (long) (state.getPlaybackSpeed()
-                                * (currentTime - updateTime)) + state.getPosition();
-                        if (duration >= 0 && position > duration) {
-                            position = duration;
-                        } else if (position < 0) {
-                            position = 0;
-                        }
-                        PlaybackStateCompat.Builder builder = new PlaybackStateCompat.Builder(
-                                state);
-                        builder.setState(state.getState(), position, state.getPlaybackSpeed(),
-                                currentTime);
-                        result = builder.build();
-                    }
-                }
-            }
-            return result == null ? state : result;
         }
 
         void sendVolumeInfoChanged(ParcelableVolumeInfo info) {
@@ -2460,7 +2430,13 @@ public class MediaSessionCompat {
 
             @Override
             public PlaybackStateCompat getPlaybackState() {
-                return getStateWithUpdatedPosition();
+                PlaybackStateCompat state;
+                MediaMetadataCompat metadata;
+                synchronized (mLock) {
+                    state = mState;
+                    metadata = mMetadata;
+                }
+                return getStateWithUpdatedPosition(state, metadata);
             }
 
             @Override
@@ -2684,7 +2660,13 @@ public class MediaSessionCompat {
                         cb.onRemoveQueueItem((MediaDescriptionCompat) msg.obj);
                         break;
                     case MSG_REMOVE_QUEUE_ITEM_AT:
-                        cb.onRemoveQueueItemAt(msg.arg1);
+                        if (mQueue != null) {
+                            QueueItem item = (msg.arg1 >= 0 && msg.arg1 < mQueue.size())
+                                    ? mQueue.get(msg.arg1) : null;
+                            if (item != null) {
+                                cb.onRemoveQueueItem(item.getDescription());
+                            }
+                        }
                         break;
                     case MSG_ADJUST_VOLUME:
                         adjustVolume(msg.arg1, 0);
@@ -2925,6 +2907,8 @@ public class MediaSessionCompat {
                 new RemoteCallbackList<>();
 
         private PlaybackStateCompat mPlaybackState;
+        private List<QueueItem> mQueue;
+        private MediaMetadataCompat mMetadata;
         @RatingCompat.Style int mRatingType;
         boolean mCaptioningEnabled;
         @PlaybackStateCompat.RepeatMode int mRepeatMode;
@@ -2946,7 +2930,7 @@ public class MediaSessionCompat {
         public void setCallback(Callback callback, Handler handler) {
             MediaSessionCompatApi21.setCallback(mSessionObj,
                     callback == null ? null : callback.mCallbackObj, handler);
-            if (!isAtLeastO() && callback != null) {
+            if (callback != null) {
                 callback.mSessionImpl = new WeakReference<MediaSessionImpl>(this);
             }
         }
@@ -3022,6 +3006,7 @@ public class MediaSessionCompat {
 
         @Override
         public void setMetadata(MediaMetadataCompat metadata) {
+            mMetadata = metadata;
             MediaSessionCompatApi21.setMetadata(mSessionObj,
                     metadata == null ? null : metadata.getMediaMetadata());
         }
@@ -3038,6 +3023,7 @@ public class MediaSessionCompat {
 
         @Override
         public void setQueue(List<QueueItem> queue) {
+            mQueue = queue;
             List<Object> queueObjs = null;
             if (queue != null) {
                 queueObjs = new ArrayList<>();
@@ -3078,45 +3064,35 @@ public class MediaSessionCompat {
             }
         }
 
-        @SuppressLint("NewApi")
         @Override
         public void setRepeatMode(@PlaybackStateCompat.RepeatMode int repeatMode) {
-            if (!isAtLeastO()) {
-                if (mRepeatMode != repeatMode) {
-                    mRepeatMode = repeatMode;
-                    int size = mExtraControllerCallbacks.beginBroadcast();
-                    for (int i = size - 1; i >= 0; i--) {
-                        IMediaControllerCallback cb = mExtraControllerCallbacks.getBroadcastItem(i);
-                        try {
-                            cb.onRepeatModeChanged(repeatMode);
-                        } catch (RemoteException e) {
-                        }
+            if (mRepeatMode != repeatMode) {
+                mRepeatMode = repeatMode;
+                int size = mExtraControllerCallbacks.beginBroadcast();
+                for (int i = size - 1; i >= 0; i--) {
+                    IMediaControllerCallback cb = mExtraControllerCallbacks.getBroadcastItem(i);
+                    try {
+                        cb.onRepeatModeChanged(repeatMode);
+                    } catch (RemoteException e) {
                     }
-                    mExtraControllerCallbacks.finishBroadcast();
                 }
-            } else {
-                MediaSessionCompatApi26.setRepeatMode(mSessionObj, repeatMode);
+                mExtraControllerCallbacks.finishBroadcast();
             }
         }
 
-        @SuppressLint("NewApi")
         @Override
         public void setShuffleModeEnabled(boolean enabled) {
-            if (!isAtLeastO()) {
-                if (mShuffleModeEnabled != enabled) {
-                    mShuffleModeEnabled = enabled;
-                    int size = mExtraControllerCallbacks.beginBroadcast();
-                    for (int i = size - 1; i >= 0; i--) {
-                        IMediaControllerCallback cb = mExtraControllerCallbacks.getBroadcastItem(i);
-                        try {
-                            cb.onShuffleModeChanged(enabled);
-                        } catch (RemoteException e) {
-                        }
+            if (mShuffleModeEnabled != enabled) {
+                mShuffleModeEnabled = enabled;
+                int size = mExtraControllerCallbacks.beginBroadcast();
+                for (int i = size - 1; i >= 0; i--) {
+                    IMediaControllerCallback cb = mExtraControllerCallbacks.getBroadcastItem(i);
+                    try {
+                        cb.onShuffleModeChanged(enabled);
+                    } catch (RemoteException e) {
                     }
-                    mExtraControllerCallbacks.finishBroadcast();
                 }
-            } else {
-                MediaSessionCompatApi26.setShuffleModeEnabled(mSessionObj, enabled);
+                mExtraControllerCallbacks.finishBroadcast();
             }
         }
 
@@ -3346,7 +3322,7 @@ public class MediaSessionCompat {
 
             @Override
             public PlaybackStateCompat getPlaybackState() {
-                return mPlaybackState;
+                return getStateWithUpdatedPosition(mPlaybackState, mMetadata);
             }
 
             @Override

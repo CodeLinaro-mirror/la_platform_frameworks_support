@@ -44,6 +44,7 @@ import java.util.ArrayList;
 public class NotificationCompatTest extends BaseInstrumentationTestCase<TestSupportActivity> {
     private static final String TEXT_RESULT_KEY = "text";
     private static final String DATA_RESULT_KEY = "data";
+    private static final String EXTRA_COLORIZED = "android.colorized";
 
     Context mContext;
 
@@ -54,6 +55,46 @@ public class NotificationCompatTest extends BaseInstrumentationTestCase<TestSupp
     @Before
     public void setup() {
         mContext = mActivityTestRule.getActivity();
+    }
+
+    @Test
+    public void testBadgeIcon() throws Throwable {
+        int badgeIcon = NotificationCompat.BADGE_ICON_SMALL;
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setBadgeIconType(badgeIcon)
+                .build();
+        if (BuildCompat.isAtLeastO()) {
+            assertEquals(badgeIcon, NotificationCompat.getBadgeIconType(n));
+        } else {
+            assertEquals(NotificationCompat.BADGE_ICON_NONE,
+                    NotificationCompat.getBadgeIconType(n));
+        }
+    }
+
+    @Test
+    public void testTimeout() throws Throwable {
+        long timeout = 23552;
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setTimeout(timeout)
+                .build();
+        if (BuildCompat.isAtLeastO()) {
+            assertEquals(timeout, NotificationCompat.getTimeout(n));
+        } else {
+            assertEquals(0, NotificationCompat.getTimeout(n));
+        }
+    }
+
+    @Test
+    public void testShortcutId() throws Throwable {
+        String shortcutId = "fgdfg";
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setShortcutId(shortcutId)
+                .build();
+        if (BuildCompat.isAtLeastO()) {
+            assertEquals(shortcutId, NotificationCompat.getShortcutId(n));
+        } else {
+            assertEquals(null, NotificationCompat.getShortcutId(n));
+        }
     }
 
     @Test
@@ -78,6 +119,33 @@ public class NotificationCompatTest extends BaseInstrumentationTestCase<TestSupp
             assertEquals(channelId, NotificationCompat.getChannel(n));
         } else {
             assertNull(NotificationCompat.getChannel(n));
+        }
+    }
+
+    @Test
+    public void testNotificationActionBuilder_assignsColorized() throws Throwable {
+        Notification n = newNotificationBuilder().setColorized(true).build();
+        if (BuildCompat.isAtLeastO()) {
+            Bundle extras = NotificationCompat.getExtras(n);
+            assertTrue(Boolean.TRUE.equals(extras.get(EXTRA_COLORIZED)));
+        }
+    }
+
+    @Test
+    public void testNotificationActionBuilder_unassignesColorized() throws Throwable {
+        Notification n = newNotificationBuilder().setColorized(false).build();
+        if (BuildCompat.isAtLeastO()) {
+            Bundle extras = NotificationCompat.getExtras(n);
+            assertTrue(Boolean.FALSE.equals(extras.get(EXTRA_COLORIZED)));
+        }
+    }
+
+    @Test
+    public void testNotificationActionBuilder_doesntAssignColorized() throws Throwable {
+        Notification n = newNotificationBuilder().build();
+        if (BuildCompat.isAtLeastO()) {
+            Bundle extras = NotificationCompat.getExtras(n);
+            assertFalse(extras.containsKey(EXTRA_COLORIZED));
         }
     }
 

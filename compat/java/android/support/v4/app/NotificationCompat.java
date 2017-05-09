@@ -42,6 +42,7 @@ import android.view.Gravity;
 import android.widget.RemoteViews;
 
 import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -525,25 +526,39 @@ public class NotificationCompat {
      */
     public static final String CATEGORY_STATUS = NotificationCompatApi21.CATEGORY_STATUS;
 
+    /** @hide */
+    @Retention(RetentionPolicy.SOURCE)
+    @RestrictTo(LIBRARY_GROUP)
+    @IntDef({BADGE_ICON_NONE, BADGE_ICON_SMALL, BADGE_ICON_LARGE})
+    public @interface BadgeIconType {}
+    /**
+     * If this notification is being shown as a badge, always show as a number.
+     */
+    public static final int BADGE_ICON_NONE = Notification.BADGE_ICON_NONE;
+
+    /**
+     * If this notification is being shown as a badge, use the icon provided to
+     * {@link Builder#setSmallIcon(int)} to represent this notification.
+     */
+    public static final int BADGE_ICON_SMALL = Notification.BADGE_ICON_SMALL;
+
+    /**
+     * If this notification is being shown as a badge, use the icon provided to
+     * {@link Builder#setLargeIcon(Bitmap) to represent this notification.
+     */
+    public static final int BADGE_ICON_LARGE = Notification.BADGE_ICON_LARGE;
+
     static final NotificationCompatImpl IMPL;
 
     interface NotificationCompatImpl {
         Notification build(Builder b, BuilderExtender extender);
-        Bundle getExtras(Notification n);
-        int getActionCount(Notification n);
         Action getAction(Notification n, int actionIndex);
         Action[] getActionsFromParcelableArrayList(ArrayList<Parcelable> parcelables);
         ArrayList<Parcelable> getParcelableArrayListForActions(Action[] actions);
-        String getCategory(Notification n);
-        boolean getLocalOnly(Notification n);
-        String getGroup(Notification n);
-        boolean isGroupSummary(Notification n);
-        String getSortKey(Notification n);
         Bundle getBundleForUnreadConversation(NotificationCompatBase.UnreadConversation uc);
         NotificationCompatBase.UnreadConversation getUnreadConversationFromBundle(
                 Bundle b, NotificationCompatBase.UnreadConversation.Factory factory,
                 RemoteInputCompatBase.RemoteInput.Factory remoteInputFactory);
-        String getChannel(Notification n);
     }
 
     /**
@@ -619,16 +634,6 @@ public class NotificationCompat {
         }
 
         @Override
-        public Bundle getExtras(Notification n) {
-            return null;
-        }
-
-        @Override
-        public int getActionCount(Notification n) {
-            return 0;
-        }
-
-        @Override
         public Action getAction(Notification n, int actionIndex) {
             return null;
         }
@@ -644,31 +649,6 @@ public class NotificationCompat {
         }
 
         @Override
-        public String getCategory(Notification n) {
-            return null;
-        }
-
-        @Override
-        public boolean getLocalOnly(Notification n) {
-            return false;
-        }
-
-        @Override
-        public String getGroup(Notification n) {
-            return null;
-        }
-
-        @Override
-        public boolean isGroupSummary(Notification n) {
-            return false;
-        }
-
-        @Override
-        public String getSortKey(Notification n) {
-            return null;
-        }
-
-        @Override
         public Bundle getBundleForUnreadConversation(NotificationCompatBase.UnreadConversation uc) {
             return null;
         }
@@ -677,11 +657,6 @@ public class NotificationCompat {
         public NotificationCompatBase.UnreadConversation getUnreadConversationFromBundle(
                 Bundle b, NotificationCompatBase.UnreadConversation.Factory factory,
                 RemoteInputCompatBase.RemoteInput.Factory remoteInputFactory) {
-            return null;
-        }
-
-        @Override
-        public String getChannel(Notification n) {
             return null;
         }
     }
@@ -709,16 +684,6 @@ public class NotificationCompat {
         }
 
         @Override
-        public Bundle getExtras(Notification n) {
-            return NotificationCompatJellybean.getExtras(n);
-        }
-
-        @Override
-        public int getActionCount(Notification n) {
-            return NotificationCompatJellybean.getActionCount(n);
-        }
-
-        @Override
         public Action getAction(Notification n, int actionIndex) {
             return (Action) NotificationCompatJellybean.getAction(n, actionIndex, Action.FACTORY,
                     RemoteInput.FACTORY);
@@ -735,26 +700,6 @@ public class NotificationCompat {
         public ArrayList<Parcelable> getParcelableArrayListForActions(
                 Action[] actions) {
             return NotificationCompatJellybean.getParcelableArrayListForActions(actions);
-        }
-
-        @Override
-        public boolean getLocalOnly(Notification n) {
-            return NotificationCompatJellybean.getLocalOnly(n);
-        }
-
-        @Override
-        public String getGroup(Notification n) {
-            return NotificationCompatJellybean.getGroup(n);
-        }
-
-        @Override
-        public boolean isGroupSummary(Notification n) {
-            return NotificationCompatJellybean.isGroupSummary(n);
-        }
-
-        @Override
-        public String getSortKey(Notification n) {
-            return NotificationCompatJellybean.getSortKey(n);
         }
     }
 
@@ -775,39 +720,9 @@ public class NotificationCompat {
         }
 
         @Override
-        public Bundle getExtras(Notification n) {
-            return NotificationCompatKitKat.getExtras(n);
-        }
-
-        @Override
-        public int getActionCount(Notification n) {
-            return NotificationCompatKitKat.getActionCount(n);
-        }
-
-        @Override
         public Action getAction(Notification n, int actionIndex) {
             return (Action) NotificationCompatKitKat.getAction(n, actionIndex, Action.FACTORY,
                     RemoteInput.FACTORY);
-        }
-
-        @Override
-        public boolean getLocalOnly(Notification n) {
-            return NotificationCompatKitKat.getLocalOnly(n);
-        }
-
-        @Override
-        public String getGroup(Notification n) {
-            return NotificationCompatKitKat.getGroup(n);
-        }
-
-        @Override
-        public boolean isGroupSummary(Notification n) {
-            return NotificationCompatKitKat.isGroupSummary(n);
-        }
-
-        @Override
-        public String getSortKey(Notification n) {
-            return NotificationCompatKitKat.getSortKey(n);
         }
     }
 
@@ -848,26 +763,6 @@ public class NotificationCompat {
                 Action[] actions) {
             return NotificationCompatApi20.getParcelableArrayListForActions(actions);
         }
-
-        @Override
-        public boolean getLocalOnly(Notification n) {
-            return NotificationCompatApi20.getLocalOnly(n);
-        }
-
-        @Override
-        public String getGroup(Notification n) {
-            return NotificationCompatApi20.getGroup(n);
-        }
-
-        @Override
-        public boolean isGroupSummary(Notification n) {
-            return NotificationCompatApi20.isGroupSummary(n);
-        }
-
-        @Override
-        public String getSortKey(Notification n) {
-            return NotificationCompatApi20.getSortKey(n);
-        }
     }
 
     @RequiresApi(21)
@@ -889,11 +784,6 @@ public class NotificationCompat {
                 b.mStyle.addCompatExtras(getExtras(notification));
             }
             return notification;
-        }
-
-        @Override
-        public String getCategory(Notification notification) {
-            return NotificationCompatApi21.getCategory(notification);
         }
 
         @Override
@@ -945,7 +835,8 @@ public class NotificationCompat {
                     b.mUseChronometer, b.mPriority, b.mSubText, b.mLocalOnly, b.mCategory,
                     b.mPeople, b.mExtras, b.mColor, b.mVisibility, b.mPublicVersion,
                     b.mGroupKey, b.mGroupSummary, b.mSortKey, b.mRemoteInputHistory, b.mContentView,
-                    b.mBigContentView, b.mHeadsUpContentView, b.mChannelId);
+                    b.mBigContentView, b.mHeadsUpContentView, b.mChannelId, b.mBadgeIcon,
+                    b.mShortcutId, b.mTimeout, b.mColorized, b.mColorizedSet);
             addActionsToBuilder(builder, b.mActions);
             addStyleToBuilderApi24(builder, b.mStyle);
             Notification notification = extender.build(b, builder);
@@ -953,11 +844,6 @@ public class NotificationCompat {
                 b.mStyle.addCompatExtras(getExtras(notification));
             }
             return notification;
-        }
-
-        @Override
-        public String getChannel(Notification n) {
-            return NotificationCompatApi26.getChannel(n);
         }
     }
 
@@ -1029,7 +915,6 @@ public class NotificationCompat {
 
     static {
         if (BuildCompat.isAtLeastO()) {
-            //noinspection AndroidLintNewApi
             IMPL = new NotificationCompatApi26Impl();
         } else if (Build.VERSION.SDK_INT >= 24) {
             IMPL = new NotificationCompatApi24Impl();
@@ -1124,6 +1009,8 @@ public class NotificationCompat {
         @RestrictTo(LIBRARY_GROUP)
         public ArrayList<Action> mActions = new ArrayList<Action>();
         boolean mLocalOnly = false;
+        boolean mColorized;
+        boolean mColorizedSet;
         String mCategory;
         Bundle mExtras;
         int mColor = COLOR_DEFAULT;
@@ -1133,6 +1020,9 @@ public class NotificationCompat {
         RemoteViews mBigContentView;
         RemoteViews mHeadsUpContentView;
         String mChannelId;
+        int mBadgeIcon = BADGE_ICON_NONE;
+        String mShortcutId;
+        long mTimeout;
 
         /** @hide */
         @RestrictTo(LIBRARY_GROUP)
@@ -1473,6 +1363,30 @@ public class NotificationCompat {
          */
         public Builder setOngoing(boolean ongoing) {
             setFlag(Notification.FLAG_ONGOING_EVENT, ongoing);
+            return this;
+        }
+
+        /**
+         * Set whether this notification should be colorized. When set, the color set with
+         * {@link #setColor(int)} will be used as the background color of this notification.
+         * <p>
+         * This should only be used for high priority ongoing tasks like navigation, an ongoing
+         * call, or other similarly high-priority events for the user.
+         * <p>
+         * For most styles, the coloring will only be applied if the notification is for a
+         * foreground service notification.
+         * <p>
+         * However, for MediaStyle and DecoratedMediaCustomViewStyle notifications
+         * that have a media session attached there is no such requirement.
+         * <p>
+         * Calling this method on any version prior to {@link android.os.Build.VERSION_CODES#O} will
+         * not have an effect on the notification and it won't be colorized.
+         *
+         * @see #setColor(int)
+         */
+        public Builder setColorized(boolean colorize) {
+            mColorized = colorize;
+            mColorizedSet = true;
             return this;
         }
 
@@ -1828,8 +1742,59 @@ public class NotificationCompat {
          *
          * No-op on versions prior to {@link android.os.Build.VERSION_CODES#O} .
          */
-        public Builder setChannel(@NonNull String channelId) {
+        public Builder setChannelId(@NonNull String channelId) {
             mChannelId = channelId;
+            return this;
+        }
+
+        /** @deprecated removed from API 26 */
+        @Deprecated
+        public Builder setChannel(@NonNull String channelId) {
+            return setChannelId(channelId);
+        }
+
+        /**
+         * Specifies the time at which this notification should be canceled, if it is not already
+         * canceled.
+         */
+        public Builder setTimeoutAfter(long durationMs) {
+            mTimeout = durationMs;
+            return this;
+        }
+
+        /** @deprecated removed from API 26 */
+        @Deprecated
+        public Builder setTimeout(long durationMs) {
+            return setTimeoutAfter(durationMs);
+        }
+
+        /**
+         * If this notification is duplicative of a Launcher shortcut, sets the
+         * {@link android.support.v4.content.pm.ShortcutInfoCompat#getId() id} of the shortcut, in
+         * case the Launcher wants to hide the shortcut.
+         *
+         * <p><strong>Note:</strong>This field will be ignored by Launchers that don't support
+         * badging or {@link android.support.v4.content.pm.ShortcutManagerCompat shortcuts}.
+         *
+         * @param shortcutId the {@link android.support.v4.content.pm.ShortcutInfoCompat#getId() id}
+         *                   of the shortcut this notification supersedes
+         */
+        public Builder setShortcutId(String shortcutId) {
+            mShortcutId = shortcutId;
+            return this;
+        }
+
+        /**
+         * Sets which icon to display as a badge for this notification.
+         *
+         * <p>Must be one of {@link #BADGE_ICON_NONE}, {@link #BADGE_ICON_SMALL},
+         * {@link #BADGE_ICON_LARGE}.
+         *
+         * <p><strong>Note:</strong> This value might be ignored, for launchers that don't support
+         * badge icons.
+         */
+        public Builder setBadgeIconType(@BadgeIconType int icon) {
+            mBadgeIcon = icon;
             return this;
         }
 
@@ -2260,7 +2225,7 @@ public class NotificationCompat {
         public static MessagingStyle extractMessagingStyleFromNotification(
                 Notification notification) {
             MessagingStyle style;
-            Bundle extras = IMPL.getExtras(notification);
+            Bundle extras = NotificationCompat.getExtras(notification);
             if (extras != null && !extras.containsKey(EXTRA_SELF_DISPLAY_NAME)) {
                 style = null;
             } else {
@@ -4269,7 +4234,13 @@ public class NotificationCompat {
      * forwards. This function will return null on older api levels.
      */
     public static Bundle getExtras(Notification notification) {
-        return IMPL.getExtras(notification);
+        if (Build.VERSION.SDK_INT >= 19) {
+            return notification.extras;
+        } else if (Build.VERSION.SDK_INT >= 16) {
+            return NotificationCompatJellybean.getExtras(notification);
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -4277,7 +4248,13 @@ public class NotificationCompat {
      * manner. Actions were supported from JellyBean (Api level 16) forwards.
      */
     public static int getActionCount(Notification notification) {
-        return IMPL.getActionCount(notification);
+        if (Build.VERSION.SDK_INT >= 19) {
+            return notification.actions != null ? notification.actions.length : 0;
+        } else if (Build.VERSION.SDK_INT >= 16) {
+            return NotificationCompatJellybean.getActionCount(notification);
+        } else {
+            return 0;
+        }
     }
 
     /**
@@ -4296,7 +4273,11 @@ public class NotificationCompat {
      * @param notification The notification to inspect.
      */
     public static String getCategory(Notification notification) {
-        return IMPL.getCategory(notification);
+        if (Build.VERSION.SDK_INT >= 21) {
+            return notification.category;
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -4306,7 +4287,16 @@ public class NotificationCompat {
      * If this hint is set, it is recommend that this notification not be bridged.
      */
     public static boolean getLocalOnly(Notification notification) {
-        return IMPL.getLocalOnly(notification);
+        if (Build.VERSION.SDK_INT >= 20) {
+            return (notification.flags & Notification.FLAG_LOCAL_ONLY) != 0;
+        } else if (Build.VERSION.SDK_INT >= 19) {
+            return notification.extras.getBoolean(NotificationCompatJellybean.EXTRA_LOCAL_ONLY);
+        } else if (Build.VERSION.SDK_INT >= 16) {
+            return NotificationCompatJellybean.getExtras(notification).getBoolean(
+                    NotificationCompatJellybean.EXTRA_LOCAL_ONLY);
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -4314,7 +4304,16 @@ public class NotificationCompat {
      * with other notifications on devices which support such rendering.
      */
     public static String getGroup(Notification notification) {
-        return IMPL.getGroup(notification);
+        if (Build.VERSION.SDK_INT >= 20) {
+            return notification.getGroup();
+        } else if (Build.VERSION.SDK_INT >= 19) {
+            return notification.extras.getString(NotificationCompatJellybean.EXTRA_GROUP_KEY);
+        } else if (Build.VERSION.SDK_INT >= 16) {
+            return NotificationCompatJellybean.getExtras(notification).getString(
+                    NotificationCompatJellybean.EXTRA_GROUP_KEY);
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -4324,7 +4323,16 @@ public class NotificationCompat {
      * @return Whether this notification is a group summary.
      */
     public static boolean isGroupSummary(Notification notification) {
-        return IMPL.isGroupSummary(notification);
+        if (Build.VERSION.SDK_INT >= 20) {
+            return (notification.flags & Notification.FLAG_GROUP_SUMMARY) != 0;
+        } else if (Build.VERSION.SDK_INT >= 19) {
+            return notification.extras.getBoolean(NotificationCompatJellybean.EXTRA_GROUP_SUMMARY);
+        } else if (Build.VERSION.SDK_INT >= 16) {
+            return NotificationCompatJellybean.getExtras(notification).getBoolean(
+                    NotificationCompatJellybean.EXTRA_GROUP_SUMMARY);
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -4340,13 +4348,75 @@ public class NotificationCompat {
      * @see String#compareTo(String)
      */
     public static String getSortKey(Notification notification) {
-        return IMPL.getSortKey(notification);
+        if (Build.VERSION.SDK_INT >= 20) {
+            return notification.getSortKey();
+        } else if (Build.VERSION.SDK_INT >= 19) {
+            return notification.extras.getString(NotificationCompatJellybean.EXTRA_SORT_KEY);
+        } else if (Build.VERSION.SDK_INT >= 16) {
+            return NotificationCompatJellybean.getExtras(notification).getString(
+                    NotificationCompatJellybean.EXTRA_SORT_KEY);
+        } else {
+            return null;
+        }
     }
 
     /**
      * @return the ID of the channel this notification posts to.
      */
+    public static String getChannelId(Notification notification) {
+        if (BuildCompat.isAtLeastO()) {
+            return notification.getChannelId();
+        } else {
+            return null;
+        }
+    }
+
+    /** @deprecated removed from API 26 */
+    @Deprecated
     public static String getChannel(Notification notification) {
-        return IMPL.getChannel(notification);
+        return getChannelId(notification);
+    }
+
+    /**
+     * Returns the time at which this notification should be canceled by the system, if it's not
+     * canceled already.
+     */
+    public static long getTimeoutAfter(Notification notification) {
+        if (BuildCompat.isAtLeastO()) {
+            return notification.getTimeoutAfter();
+        } else {
+            return 0;
+        }
+    }
+
+    /** @deprecated removed from API 26 */
+    @Deprecated
+    public static long getTimeout(Notification notification) {
+        return getTimeoutAfter(notification);
+    }
+
+    /**
+     * Returns what icon should be shown for this notification if it is being displayed in a
+     * Launcher that supports badging. Will be one of {@link #BADGE_ICON_NONE},
+     * {@link #BADGE_ICON_SMALL}, or {@link #BADGE_ICON_LARGE}.
+     */
+    public static int getBadgeIconType(Notification notification) {
+        if (BuildCompat.isAtLeastO()) {
+            return notification.getBadgeIconType();
+        } else {
+            return BADGE_ICON_NONE;
+        }
+    }
+
+    /**
+     * Returns the {@link android.support.v4.content.pm.ShortcutInfoCompat#getId() id} that this
+     * notification supersedes, if any.
+     */
+    public static String getShortcutId(Notification notification) {
+        if (BuildCompat.isAtLeastO()) {
+            return notification.getShortcutId();
+        } else {
+            return null;
+        }
     }
 }

@@ -20,14 +20,17 @@ import static android.support.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.content.res.Resources;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.annotation.RestrictTo;
+import android.support.v4.graphics.TypefaceCompat.TypefaceHolder;
 import android.support.v4.widget.TextViewCompat;
 import android.support.v7.appcompat.R;
-import android.support.v7.text.AllCapsTransformationMethod;
+import android.text.TextPaint;
 import android.text.method.PasswordTransformationMethod;
 import android.util.AttributeSet;
 import android.util.TypedValue;
@@ -60,6 +63,7 @@ class AppCompatTextHelper {
     void loadFromAttributes(AttributeSet attrs, int defStyleAttr) {
         final Context context = mView.getContext();
         final AppCompatDrawableManager drawableManager = AppCompatDrawableManager.get();
+        final boolean shouldLoadFonts = shouldLoadFontResources(context);
 
         // First read the TextAppearance style id
         TintTypedArray a = TintTypedArray.obtainStyledAttributes(context, attrs,
@@ -94,6 +98,8 @@ class AppCompatTextHelper {
         ColorStateList textColor = null;
         ColorStateList textColorHint = null;
         ColorStateList textColorLink = null;
+        TypefaceHolder fontTypeface = null;
+        int style = Typeface.NORMAL;
 
         // First check TextAppearance's textAllCaps value
         if (ap != -1) {
@@ -101,6 +107,19 @@ class AppCompatTextHelper {
             if (!hasPwdTm && a.hasValue(R.styleable.TextAppearance_textAllCaps)) {
                 allCapsSet = true;
                 allCaps = a.getBoolean(R.styleable.TextAppearance_textAllCaps, false);
+            }
+            if (shouldLoadFonts) {
+                style = a.getInt(R.styleable.TextAppearance_android_textStyle, Typeface.NORMAL);
+
+                // If we're running on < API 26, we need to load font resources manually.
+                if (a.hasValue(R.styleable.TextAppearance_android_fontFamily)) {
+                    try {
+                        fontTypeface = a.getFont(
+                                R.styleable.TextAppearance_android_fontFamily, style);
+                    } catch (UnsupportedOperationException | Resources.NotFoundException e) {
+                        // Expected if it is not a font resource.
+                    }
+                }
             }
             if (Build.VERSION.SDK_INT < 23) {
                 // If we're running on < API 23, the text color may contain theme references
@@ -142,6 +161,18 @@ class AppCompatTextHelper {
                         R.styleable.TextAppearance_android_textColorLink);
             }
         }
+
+        if (shouldLoadFonts) {
+            // If we're running on < API 26, we need to load font resources manually.
+            if (a.hasValue(R.styleable.TextAppearance_android_fontFamily)) {
+                style = a.getInt(R.styleable.TextAppearance_android_textStyle, Typeface.NORMAL);
+                try {
+                    fontTypeface = a.getFont(R.styleable.TextAppearance_android_fontFamily, style);
+                } catch (UnsupportedOperationException | Resources.NotFoundException e) {
+                    // Expected if it is not a font resource.
+                }
+            }
+        }
         a.recycle();
 
         if (textColor != null) {
@@ -155,6 +186,15 @@ class AppCompatTextHelper {
         }
         if (!hasPwdTm && allCapsSet) {
             setAllCaps(allCaps);
+        }
+        if (fontTypeface != null) {
+            mView.setTypeface(fontTypeface.getTypeface());
+            TextPaint paint = mView.getPaint();
+            boolean needFakeBold =
+                    (style & Typeface.BOLD) != 0 && fontTypeface.getWeight() < 600;
+            paint.setFakeBoldText(needFakeBold);
+            boolean needFakeItalic = (style & Typeface.ITALIC) != 0 && !fontTypeface.isItalic();
+            paint.setTextSkewX(needFakeItalic ? -0.25f : 0);
         }
 
         mAutoSizeTextHelper.loadFromAttributes(attrs, defStyleAttr);
@@ -183,6 +223,11 @@ class AppCompatTextHelper {
         }
     }
 
+    private boolean shouldLoadFontResources(Context context) {
+        // We do not load fonts on restricted contexts for security reasons.
+        return !context.isRestricted();
+    }
+
     void onSetTextAppearance(Context context, int resId) {
         final TintTypedArray a = TintTypedArray.obtainStyledAttributes(context,
                 resId, R.styleable.TextAppearance);
@@ -207,9 +252,7 @@ class AppCompatTextHelper {
     }
 
     void setAllCaps(boolean allCaps) {
-        mView.setTransformationMethod(allCaps
-                ? new AllCapsTransformationMethod(mView.getContext())
-                : null);
+        mView.setAllCaps(allCaps);
     }
 
     void applyCompoundDrawablesTints() {

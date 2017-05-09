@@ -34,7 +34,6 @@ import android.database.Cursor;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -63,7 +62,6 @@ import android.view.MotionEvent;
 import android.view.TouchDelegate;
 import android.view.View;
 import android.view.ViewConfiguration;
-import android.view.ViewTreeObserver;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
@@ -282,17 +280,17 @@ public class SearchView extends LinearLayoutCompat implements CollapsibleActionV
                 R.styleable.SearchView_layout, R.layout.abc_search_view);
         inflater.inflate(layoutResId, this, true);
 
-        mSearchSrcTextView = (SearchAutoComplete) findViewById(R.id.search_src_text);
+        mSearchSrcTextView = findViewById(R.id.search_src_text);
         mSearchSrcTextView.setSearchView(this);
 
         mSearchEditFrame = findViewById(R.id.search_edit_frame);
         mSearchPlate = findViewById(R.id.search_plate);
         mSubmitArea = findViewById(R.id.submit_area);
-        mSearchButton = (ImageView) findViewById(R.id.search_button);
-        mGoButton = (ImageView) findViewById(R.id.search_go_btn);
-        mCloseButton = (ImageView) findViewById(R.id.search_close_btn);
-        mVoiceButton = (ImageView) findViewById(R.id.search_voice_btn);
-        mCollapsedIcon = (ImageView) findViewById(R.id.search_mag_icon);
+        mSearchButton = findViewById(R.id.search_button);
+        mGoButton = findViewById(R.id.search_go_btn);
+        mCloseButton = findViewById(R.id.search_close_btn);
+        mVoiceButton = findViewById(R.id.search_voice_btn);
+        mCollapsedIcon = findViewById(R.id.search_mag_icon);
 
         // Set up icons and backgrounds.
         ViewCompat.setBackground(mSearchPlate,
@@ -373,35 +371,17 @@ public class SearchView extends LinearLayoutCompat implements CollapsibleActionV
 
         mDropDownAnchor = findViewById(mSearchSrcTextView.getDropDownAnchor());
         if (mDropDownAnchor != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-                addOnLayoutChangeListenerToDropDownAnchorSDK11();
-            } else {
-                addOnLayoutChangeListenerToDropDownAnchorBase();
-            }
+            mDropDownAnchor.addOnLayoutChangeListener(new OnLayoutChangeListener() {
+                @Override
+                public void onLayoutChange(View v, int left, int top, int right, int bottom,
+                        int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                    adjustDropDownSizeAndPosition();
+                }
+            });
         }
 
         updateViewsVisibility(mIconifiedByDefault);
         updateQueryHint();
-    }
-
-    private void addOnLayoutChangeListenerToDropDownAnchorSDK11() {
-        mDropDownAnchor.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
-            @Override
-            public void onLayoutChange(View v, int left, int top, int right, int bottom,
-                    int oldLeft, int oldTop, int oldRight, int oldBottom) {
-                adjustDropDownSizeAndPosition();
-            }
-        });
-    }
-
-    private void addOnLayoutChangeListenerToDropDownAnchorBase() {
-        mDropDownAnchor.getViewTreeObserver()
-                .addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-                    @Override
-                    public void onGlobalLayout() {
-                        adjustDropDownSizeAndPosition();
-                    }
-                });
     }
 
     int getSuggestionRowLayout() {

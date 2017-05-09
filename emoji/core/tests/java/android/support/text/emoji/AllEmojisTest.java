@@ -22,10 +22,11 @@ import static junit.framework.TestCase.assertTrue;
 
 import static org.junit.Assert.assertThat;
 
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
+import android.support.test.filters.SdkSuppress;
 import android.support.test.filters.SmallTest;
-import android.support.text.emoji.test.R;
 import android.support.text.emoji.util.TestString;
 
 import org.junit.BeforeClass;
@@ -46,6 +47,8 @@ import java.util.Collection;
  */
 @SmallTest
 @RunWith(Parameterized.class)
+@SdkSuppress(minSdkVersion = 19)
+@TargetApi(19)
 public class AllEmojisTest {
 
     /**
@@ -66,13 +69,12 @@ public class AllEmojisTest {
     @Parameterized.Parameters
     public static Collection<Object[]> data() throws IOException {
         final Context context = InstrumentationRegistry.getTargetContext();
-        final InputStream inputStream = context.getResources().openRawResource(R.raw.emojis);
+        final InputStream inputStream = context.getAssets().open("emojis.txt");
         try {
             final BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
             final Collection<Object[]> data = new ArrayList<>();
             final StringBuilder stringBuilder = new StringBuilder();
             final StringBuilder codePointsBuilder = new StringBuilder();
-            final int hexPrefixLength = "0x".length();
 
             String s;
             while ((s = reader.readLine()) != null) {

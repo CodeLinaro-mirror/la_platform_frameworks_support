@@ -16,7 +16,6 @@
 
 package android.support.v4.app;
 
-import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -348,14 +347,13 @@ class NotificationCompatJellybean {
         }
     }
 
-    @SuppressLint("NewApi") // Intentionally looking up Notification.Action using reflection.
     private static boolean ensureActionReflectionReadyLocked() {
         if (sActionsAccessFailed) {
             return false;
         }
         try {
             if (sActionsField == null) {
-                sActionClass = Class.forName(Notification.Action.class.getName());
+                sActionClass = Class.forName("android.app.Notification$Action");
                 sActionIconField = sActionClass.getDeclaredField("icon");
                 sActionTitleField = sActionClass.getDeclaredField("title");
                 sActionIntentField = sActionClass.getDeclaredField("actionIntent");
@@ -438,21 +436,5 @@ class NotificationCompatJellybean {
         bundle.putParcelableArray(KEY_REMOTE_INPUTS, RemoteInputCompatJellybean.toBundleArray(
                 action.getRemoteInputs()));
         return bundle;
-    }
-
-    public static boolean getLocalOnly(Notification notif) {
-        return getExtras(notif).getBoolean(EXTRA_LOCAL_ONLY);
-    }
-
-    public static String getGroup(Notification n) {
-        return getExtras(n).getString(EXTRA_GROUP_KEY);
-    }
-
-    public static boolean isGroupSummary(Notification n) {
-        return getExtras(n).getBoolean(EXTRA_GROUP_SUMMARY);
-    }
-
-    public static String getSortKey(Notification n) {
-        return getExtras(n).getString(EXTRA_SORT_KEY);
     }
 }

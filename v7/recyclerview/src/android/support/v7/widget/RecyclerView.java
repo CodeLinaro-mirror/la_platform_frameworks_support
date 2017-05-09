@@ -49,6 +49,7 @@ import android.support.v4.view.NestedScrollingChild;
 import android.support.v4.view.NestedScrollingChildHelper;
 import android.support.v4.view.ScrollingView;
 import android.support.v4.view.ViewCompat;
+import android.support.v4.view.ViewConfigurationCompat;
 import android.support.v4.view.accessibility.AccessibilityEventCompat;
 import android.support.v4.view.accessibility.AccessibilityNodeInfoCompat;
 import android.support.v4.widget.EdgeEffectCompat;
@@ -57,7 +58,6 @@ import android.support.v7.widget.RecyclerView.ItemAnimator.ItemHolderInfo;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.SparseArray;
-import android.util.TypedValue;
 import android.view.Display;
 import android.view.FocusFinder;
 import android.view.InputDevice;
@@ -447,8 +447,11 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
     private OnFlingListener mOnFlingListener;
     private final int mMinFlingVelocity;
     private final int mMaxFlingVelocity;
-    // This value is used when handling generic motion events.
-    private float mScrollFactor = Float.MIN_VALUE;
+
+    // This value is used when handling rotary encoder generic motion events.
+    private float mScaledHorizontalScrollFactor = Float.MIN_VALUE;
+    private float mScaledVerticalScrollFactor = Float.MIN_VALUE;
+
     private boolean mPreserveFocusAfterLayout = true;
 
     final ViewFlinger mViewFlinger = new ViewFlinger();
@@ -567,6 +570,10 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
 
         final ViewConfiguration vc = ViewConfiguration.get(context);
         mTouchSlop = vc.getScaledTouchSlop();
+        mScaledHorizontalScrollFactor =
+                ViewConfigurationCompat.getScaledHorizontalScrollFactor(vc, context);
+        mScaledVerticalScrollFactor =
+                ViewConfigurationCompat.getScaledVerticalScrollFactor(vc, context);
         mMinFlingVelocity = vc.getScaledMinimumFlingVelocity();
         mMaxFlingVelocity = vc.getScaledMaximumFlingVelocity();
         setWillNotDraw(getOverScrollMode() == View.OVER_SCROLL_NEVER);
@@ -740,6 +747,11 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
                 final View child = RecyclerView.this.getChildAt(index);
                 if (child != null) {
                     dispatchChildDetached(child);
+
+                    // Clear any android.view.animation.Animation that may prevent the item from
+                    // detaching when being removed. If a child is re-added before the
+                    // lazy detach occurs, it will receive invalid attach/detach sequencing.
+                    child.clearAnimation();
                 }
                 if (VERBOSE_TRACING) {
                     TraceCompat.beginSection("RV removeViewAt");
@@ -759,7 +771,13 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
             public void removeAllViews() {
                 final int count = getChildCount();
                 for (int i = 0; i < count; i++) {
-                    dispatchChildDetached(getChildAt(i));
+                    View child = getChildAt(i);
+                    dispatchChildDetached(child);
+
+                    // Clear any android.view.animation.Animation that may prevent the item from
+                    // detaching when being removed. If a child is re-added before the
+                    // lazy detach occurs, it will receive invalid attach/detach sequencing.
+                    child.clearAnimation();
                 }
                 RecyclerView.this.removeAllViews();
             }
@@ -1457,7 +1475,7 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
      * @return the ItemDecoration at index position, or null if invalid index.
      */
     public ItemDecoration getItemDecorationAt(int index) {
-        if (index < 0 || index > mItemDecorations.size()) {
+        if (index < 0 || index >= mItemDecorations.size()) {
             return null;
         }
 
@@ -2998,9 +3016,9 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
         if (mLayoutFrozen) {
             return false;
         }
-        if ((event.getSource() & InputDeviceCompat.SOURCE_CLASS_POINTER) != 0) {
-            if (event.getAction() == MotionEvent.ACTION_SCROLL) {
-                final float vScroll, hScroll;
+        if (event.getAction() == MotionEventCompat.ACTION_SCROLL) {
+            final float vScroll, hScroll;
+            if ((event.getSource() & InputDeviceCompat.SOURCE_CLASS_POINTER) != 0) {
                 if (mLayout.canScrollVertically()) {
                     // Inverse the sign of the vertical scroll to align the scroll orientation
                     // with AbsListView.
@@ -3013,32 +3031,31 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
                 } else {
                     hScroll = 0f;
                 }
-
-                if (vScroll != 0 || hScroll != 0) {
-                    final float scrollFactor = getScrollFactor();
-                    scrollByInternal((int) (hScroll * scrollFactor),
-                            (int) (vScroll * scrollFactor), event);
+            } else if ((event.getSource() & InputDeviceCompat.SOURCE_ROTARY_ENCODER) != 0) {
+                final float axisScroll = event.getAxisValue(MotionEventCompat.AXIS_SCROLL);
+                if (mLayout.canScrollVertically()) {
+                    // Invert the sign of the vertical scroll to align the scroll orientation
+                    // with AbsListView.
+                    vScroll = -axisScroll;
+                    hScroll = 0f;
+                } else if (mLayout.canScrollHorizontally()) {
+                    vScroll = 0f;
+                    hScroll = axisScroll;
+                } else {
+                    vScroll = 0f;
+                    hScroll = 0f;
                 }
+            } else {
+                vScroll = 0f;
+                hScroll = 0f;
+            }
+
+            if (vScroll != 0 || hScroll != 0) {
+                scrollByInternal((int) (hScroll * mScaledHorizontalScrollFactor),
+                        (int) (vScroll * mScaledVerticalScrollFactor), event);
             }
         }
         return false;
-    }
-
-    /**
-     * Ported from View.getVerticalScrollFactor.
-     */
-    private float getScrollFactor() {
-        if (mScrollFactor == Float.MIN_VALUE) {
-            TypedValue outValue = new TypedValue();
-            if (getContext().getTheme().resolveAttribute(
-                    android.R.attr.listPreferredItemHeight, outValue, true)) {
-                mScrollFactor = outValue.getDimension(
-                        getContext().getResources().getDisplayMetrics());
-            } else {
-                return 0; //listPreferredItemHeight is not defined, no generic scrolling
-            }
-        }
-        return mScrollFactor;
     }
 
     @Override
@@ -3833,6 +3850,12 @@ public class RecyclerView extends ViewGroup implements ScrollingView, NestedScro
                         + " is not flagged as tmp detached." + vh);
             }
         }
+
+        // Clear any android.view.animation.Animation that may prevent the item from
+        // detaching when being removed. If a child is re-added before the
+        // lazy detach occurs, it will receive invalid attach/detach sequencing.
+        child.clearAnimation();
+
         dispatchChildDetached(child);
         super.removeDetachedView(child, animate);
     }
