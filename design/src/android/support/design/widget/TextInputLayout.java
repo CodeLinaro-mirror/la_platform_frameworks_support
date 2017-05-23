@@ -291,7 +291,8 @@ public class TextInputLayout extends LinearLayout {
      * @param typeface typeface to use, or {@code null} to use the default.
      */
     public void setTypeface(@Nullable Typeface typeface) {
-        if (typeface != mTypeface) {
+        if ((mTypeface != null && !mTypeface.equals(typeface))
+                || (mTypeface == null && typeface != null)) {
             mTypeface = typeface;
 
             mCollapsingTextHelper.setTypefaces(typeface);
@@ -625,8 +626,8 @@ public class TextInputLayout extends LinearLayout {
                     // we manually set something appropriate
                     TextViewCompat.setTextAppearance(mErrorView,
                             android.support.v7.appcompat.R.style.TextAppearance_AppCompat_Caption);
-                    mErrorView.setTextColor(ContextCompat.getColor(
-                            getContext(), R.color.design_textinput_error_color_light));
+                    mErrorView.setTextColor(ContextCompat.getColor(getContext(),
+                            android.support.v7.appcompat.R.color.error_color_material));
                 }
                 mErrorView.setVisibility(INVISIBLE);
                 ViewCompat.setAccessibilityLiveRegion(mErrorView,
@@ -769,8 +770,8 @@ public class TextInputLayout extends LinearLayout {
                     // we manually set something appropriate
                     TextViewCompat.setTextAppearance(mCounterView,
                             android.support.v7.appcompat.R.style.TextAppearance_AppCompat_Caption);
-                    mCounterView.setTextColor(ContextCompat.getColor(
-                            getContext(), R.color.design_textinput_error_color_light));
+                    mCounterView.setTextColor(ContextCompat.getColor(getContext(),
+                            android.support.v7.appcompat.R.color.error_color_material));
                 }
                 addIndicator(mCounterView, -1);
                 if (mEditText == null) {

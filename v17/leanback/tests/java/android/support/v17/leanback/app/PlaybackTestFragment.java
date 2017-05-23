@@ -94,11 +94,11 @@ public class PlaybackTestFragment extends PlaybackFragment {
         mGlue = new PlaybackControlHelper(context) {
             @Override
             public int getUpdatePeriod() {
-                int totalTime = getControlsRow().getTotalTime();
+                long totalTime = getControlsRow().getDuration();
                 if (getView() == null || getView().getWidth() == 0 || totalTime <= 0) {
                     return 1000;
                 }
-                return Math.max(16, totalTime / getView().getWidth());
+                return 16;
             }
 
             @Override
@@ -172,9 +172,9 @@ public class PlaybackTestFragment extends PlaybackFragment {
         PlaybackControlHelper(Context context) {
             super(context, sFastForwardSpeeds);
             mThumbsUpAction = new PlaybackControlsRow.ThumbsUpAction(context);
-            mThumbsUpAction.setIndex(PlaybackControlsRow.ThumbsUpAction.OUTLINE);
+            mThumbsUpAction.setIndex(PlaybackControlsRow.ThumbsUpAction.INDEX_OUTLINE);
             mThumbsDownAction = new PlaybackControlsRow.ThumbsDownAction(context);
-            mThumbsDownAction.setIndex(PlaybackControlsRow.ThumbsDownAction.OUTLINE);
+            mThumbsDownAction.setIndex(PlaybackControlsRow.ThumbsDownAction.INDEX_OUTLINE);
             mRepeatAction = new PlaybackControlsRow.RepeatAction(context);
             mPipAction = new PlaybackControlsRow.PictureInPictureAction(context);
         }
@@ -315,7 +315,7 @@ public class PlaybackTestFragment extends PlaybackFragment {
             sProgressHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    if (mRepeatAction.getIndex() == PlaybackControlsRow.RepeatAction.NONE) {
+                    if (mRepeatAction.getIndex() == PlaybackControlsRow.RepeatAction.INDEX_NONE) {
                         pause();
                     } else {
                         play(PlaybackControlGlue.PLAYBACK_SPEED_NORMAL);

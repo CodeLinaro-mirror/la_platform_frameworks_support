@@ -26,6 +26,7 @@ import android.graphics.RectF;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.RestrictTo;
+import android.support.v4.os.BuildCompat;
 import android.support.v4.widget.TextViewCompat;
 import android.support.v7.appcompat.R;
 import android.text.Layout;
@@ -62,6 +63,9 @@ class AppCompatTextViewAutoSizeHelper {
     private static final int DEFAULT_AUTO_SIZE_GRANULARITY_IN_PX = 1;
     // Use this to specify that any of the auto-size configuration int values have not been set.
     static final int UNSET_AUTO_SIZE_UNIFORM_CONFIGURATION_VALUE = -1;
+    // Ported from TextView#VERY_WIDE. Represents a maximum width in pixels the TextView takes when
+    // horizontal scrolling is activated.
+    private static final int VERY_WIDE = 1024 * 1024;
     // Auto-size text type.
     private int mAutoSizeTextType = TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE;
     // Specify if auto-size text is needed.
@@ -513,13 +517,14 @@ class AppCompatTextViewAutoSizeHelper {
             }
 
             mNeedsAutoSizeText = true;
+
             // If the build version is at least 26 there is no need to auto-size using this
             // helper because the job has been delegated to the actual TextView but the
             // configuration still needs to be done for the case where this function is called
             // from {@link #loadFromAttributes}, in which case the auto-size configuration
             // attributes set up in this function will be read by {@link AppCompatTextHelper}
             // and after passed on to the actual TextView which will take care of auto-sizing.
-            if (Build.VERSION.SDK_INT < 26) {
+            if (!BuildCompat.isAtLeastO()) {
                 autoSizeText();
             }
         }
@@ -638,8 +643,12 @@ class AppCompatTextViewAutoSizeHelper {
     private boolean suggestedSizeFitsInSpace(int suggestedSizeInPx, RectF availableSpace) {
         final CharSequence text = mTextView.getText();
         final int maxLines = Build.VERSION.SDK_INT >= 16 ? mTextView.getMaxLines() : -1;
-        final int availableWidth = mTextView.getMeasuredWidth() - mTextView.getTotalPaddingLeft()
-                - mTextView.getTotalPaddingRight();
+        final boolean horizontallyScrolling = invokeAndReturnWithDefault(
+                mTextView, "getHorizontallyScrolling", false);
+        final int availableWidth = horizontallyScrolling
+                ? VERY_WIDE
+                : mTextView.getMeasuredWidth() - mTextView.getTotalPaddingLeft()
+                        - mTextView.getTotalPaddingRight();
         if (mTempTextPaint == null) {
             mTempTextPaint = new TextPaint();
         } else {

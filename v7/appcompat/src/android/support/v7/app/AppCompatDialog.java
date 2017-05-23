@@ -93,9 +93,10 @@ public class AppCompatDialog extends Dialog implements AppCompatCallback {
         getDelegate().setContentView(view, params);
     }
 
+    @SuppressWarnings("TypeParameterUnusedInFormals")
     @Nullable
     @Override
-    public View findViewById(@IdRes int id) {
+    public <T extends View> T findViewById(@IdRes int id) {
         return getDelegate().findViewById(id);
     }
 

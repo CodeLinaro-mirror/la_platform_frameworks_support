@@ -36,6 +36,7 @@ import android.support.v17.leanback.widget.HeaderItem;
 import android.support.v17.leanback.widget.ItemBridgeAdapter;
 import android.support.v17.leanback.widget.ListRow;
 import android.support.v17.leanback.widget.ListRowPresenter;
+import android.support.v17.leanback.widget.ObjectAdapter;
 import android.support.v17.leanback.widget.OnItemViewClickedListener;
 import android.support.v17.leanback.widget.Presenter;
 import android.support.v17.leanback.widget.Row;
@@ -86,7 +87,7 @@ public class RowsSupportFragmentTest extends SingleSupportFragmentTestBase {
     }
 
     @Test
-    public void defaultAlignment() throws InterruptedException {
+    public void defaultAlignment() throws Throwable {
         SingleSupportFragmentTestActivity activity = launchAndWaitActivity(F_defaultAlignment.class, 1000);
 
         final Rect rect = new Rect();
@@ -99,6 +100,7 @@ public class RowsSupportFragmentTest extends SingleSupportFragmentTestBase {
         assertEquals("First row is initially aligned to top of screen", 0, rect.top);
 
         sendKeys(KeyEvent.KEYCODE_DPAD_DOWN);
+        waitForScrollIdle(gridView);
         View row1 = gridView.findViewHolderForAdapterPosition(1).itemView;
         PollingCheck.waitFor(new PollingCheck.ViewStableOnScreen(row1));
 
@@ -298,6 +300,38 @@ public class RowsSupportFragmentTest extends SingleSupportFragmentTestBase {
                 }
         );
         assertSame(prefetchedListRowVh.getItemViewHolder(0), fragment.mLastClickedItemViewHolder);
+    }
+
+    @Test
+    public void changeHasStableIdToTrueAfterViewCreated() throws InterruptedException {
+        SingleSupportFragmentTestActivity activity =
+                launchAndWaitActivity(RowsSupportFragment.class, 2000);
+        final RowsSupportFragment fragment = (RowsSupportFragment) activity.getTestFragment();
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                new Runnable() {
+                    public void run() {
+                        ObjectAdapter adapter = new ObjectAdapter() {
+                            @Override
+                            public int size() {
+                                return 0;
+                            }
+
+                            @Override
+                            public Object get(int position) {
+                                return null;
+                            }
+
+                            @Override
+                            public long getId(int position) {
+                                return 1;
+                            }
+                        };
+                        adapter.setHasStableIds(true);
+                        fragment.setAdapter(adapter);
+                    }
+                }
+        );
     }
 
 }

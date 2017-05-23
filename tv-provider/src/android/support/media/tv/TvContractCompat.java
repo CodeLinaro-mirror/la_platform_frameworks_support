@@ -18,9 +18,11 @@ package android.support.media.tv;
 
 import static android.support.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
+import android.app.Activity;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentUris;
+import android.content.Context;
 import android.content.Intent;
 import android.media.tv.TvContentRating;
 import android.media.tv.TvContract;
@@ -33,6 +35,7 @@ import android.support.annotation.Nullable;
 import android.support.annotation.RestrictTo;
 import android.support.annotation.StringDef;
 import android.support.media.tv.TvContractCompat.Programs.Genres;
+import android.support.v4.os.BuildCompat;
 import android.text.TextUtils;
 
 import java.lang.annotation.Retention;
@@ -80,8 +83,9 @@ public final class TvContractCompat {
     private static final String PATH_PASSTHROUGH = "passthrough";
 
     /**
-     * Activity Action: sent by an application telling the system to set the given channel as
-     * browsable. This is only relevant to channels with {@link Channels#TYPE_PREVIEW} type.
+     * Broadcast Action: sent when an application requests the system to make the given channel
+     * browsable.  The operation is performed in the background without user interaction. This
+     * is only relevant to channels with {@link Channels#TYPE_PREVIEW} type.
      *
      * <p>The intent must contain the following bundle parameters:
      * <ul>
@@ -89,9 +93,26 @@ public final class TvContractCompat {
      *     integer.</li>
      *     <li>{@link #EXTRA_PACKAGE_NAME}: the package name of the requesting application.</li>
      * </ul>
+     * @hide
      */
-    public static final String ACTION_MAKE_CHANNEL_BROWSABLE =
-            "android.media.tv.action.MAKE_CHANNEL_BROWSABLE";
+    @RestrictTo(LIBRARY_GROUP)
+    public static final String ACTION_CHANNEL_BROWSABLE_REQUESTED =
+            "android.media.tv.action.CHANNEL_BROWSABLE_REQUESTED";
+
+    /**
+     * Activity Action: sent by an application telling the system to make the given channel
+     * browsable with user interaction. The system may show UI to ask user to approve the channel.
+     * This is only relevant to channels with {@link Channels#TYPE_PREVIEW} type. Use
+     * {@link Activity#startActivityForResult} to get the result of the request.
+     *
+     * <p>The intent must contain the following bundle parameters:
+     * <ul>
+     *     <li>{@link #EXTRA_CHANNEL_ID}: ID for the {@link Channels#TYPE_PREVIEW} channel as a long
+     *     integer.</li>
+     * </ul>
+     */
+    public static final String ACTION_REQUEST_CHANNEL_BROWSABLE =
+            "android.media.tv.action.REQUEST_CHANNEL_BROWSABLE";
 
     /**
      * Broadcast Action: sent by the system to tell the target TV input that one of its preview
@@ -134,10 +155,33 @@ public final class TvContractCompat {
     public static final String ACTION_PREVIEW_PROGRAM_ADDED_TO_WATCH_NEXT =
             "android.media.tv.action.PREVIEW_PROGRAM_ADDED_TO_WATCH_NEXT";
 
-    /** The key for a bundle parameter containing a channel ID as a long integer */
+    /**
+     * Broadcast Action: sent to the target TV input after it is first installed to notify the input
+     * to initialize its channels and programs to the system content provider.
+     *
+     * <p>Note that this intent is sent only on devices with
+     * {@link android.content.pm.PackageManager#FEATURE_LEANBACK} enabled. Besides that, in order
+     * to receive this intent, the target TV input must:
+     * <ul>
+     *     <li>Declare a broadcast receiver for this intent in its
+     *         <code>AndroidManifest.xml</code>.</li>
+     *     <li>Declare appropriate permissions to write channel and program data in its
+     *         <code>AndroidManifest.xml</code>.</li>
+     * </ul>
+     */
+    public static final String ACTION_INITIALIZE_PROGRAMS =
+            "android.media.tv.action.INITIALIZE_PROGRAMS";
+
+    /**
+     * The key for a bundle parameter containing a channel ID as a long integer
+     */
     public static final String EXTRA_CHANNEL_ID = "android.media.tv.extra.CHANNEL_ID";
 
-    /** The key for a bundle parameter containing a package name as a string. */
+    /**
+     * The key for a bundle parameter containing a package name as a string.
+     * @hide
+     */
+    @RestrictTo(LIBRARY_GROUP)
     public static final String EXTRA_PACKAGE_NAME = "android.media.tv.extra.PACKAGE_NAME";
 
     /** The key for a bundle parameter containing a program ID as a long integer. */
@@ -510,6 +554,24 @@ public final class TvContractCompat {
         }
     }
 
+    /**
+     * Requests to make a channel browsable.
+     *
+     * <p>Once called, the system will review the request and make the channel browsable based on
+     * its policy. The first request from a package is guaranteed to be approved. This is only
+     * relevant to channels with {@link Channels#TYPE_PREVIEW} type.
+     *
+     * <p>No-op on devices prior to {@link android.os.Build.VERSION_CODES#O}.
+     *
+     * @param context The context for accessing content provider.
+     * @param channelId The channel ID to be browsable.
+     * @see Channels#COLUMN_BROWSABLE
+     */
+    public static void requestChannelBrowsable(Context context, long channelId) {
+        if (BuildCompat.isAtLeastO()) {
+            TvContract.requestChannelBrowsable(context, channelId);
+        }
+    }
 
     private TvContractCompat() {}
 
@@ -535,6 +597,37 @@ public final class TvContractCompat {
      */
     @RestrictTo(LIBRARY_GROUP)
     interface ProgramColumns {
+        /** @hide */
+        @IntDef({
+                REVIEW_RATING_STYLE_STARS,
+                REVIEW_RATING_STYLE_THUMBS_UP_DOWN,
+                REVIEW_RATING_STYLE_PERCENTAGE,
+        })
+        @Retention(RetentionPolicy.SOURCE)
+        @RestrictTo(LIBRARY_GROUP)
+        @interface ReviewRatingStyle {}
+
+        /**
+         * The review rating style for five star rating.
+         *
+         * @see #COLUMN_REVIEW_RATING_STYLE
+         */
+        int REVIEW_RATING_STYLE_STARS = 0;
+
+        /**
+         * The review rating style for thumbs-up and thumbs-down rating.
+         *
+         * @see #COLUMN_REVIEW_RATING_STYLE
+         */
+        int REVIEW_RATING_STYLE_THUMBS_UP_DOWN = 1;
+
+        /**
+         * The review rating style for 0 to 100 point system.
+         *
+         * @see #COLUMN_REVIEW_RATING_STYLE
+         */
+        int REVIEW_RATING_STYLE_PERCENTAGE = 2;
+
         /**
          * The title of this TV program.
          *
@@ -797,6 +890,33 @@ public final class TvContractCompat {
          * <p>Type: INTEGER
          */
         String COLUMN_VERSION_NUMBER = "version_number";
+
+        /**
+         * The review rating score style used for {@link #COLUMN_REVIEW_RATING}.
+         *
+         * <p> The value should match one of the followings: {@link #REVIEW_RATING_STYLE_STARS},
+         * {@link #REVIEW_RATING_STYLE_THUMBS_UP_DOWN}, and {@link #REVIEW_RATING_STYLE_PERCENTAGE}.
+         *
+         * <p>Type: INTEGER
+         * @see #COLUMN_REVIEW_RATING
+         */
+        String COLUMN_REVIEW_RATING_STYLE = "review_rating_style";
+
+        /**
+         * The review rating score for this program.
+         *
+         * <p>The format of the value is dependent on {@link #COLUMN_REVIEW_RATING_STYLE}. If the
+         * style is {@link #REVIEW_RATING_STYLE_STARS}, the value should be a real number between
+         * 0.0 and 5.0. (e.g. "4.5") If the style is {@link #REVIEW_RATING_STYLE_THUMBS_UP_DOWN},
+         * the value should be two integers, one for thumbs-up count and the other for thumbs-down
+         * count, with a comma between them. (e.g. "200,40") If the style is
+         * {@link #REVIEW_RATING_STYLE_PERCENTAGE}, the value shoule be a real number between 0 and
+         * 100. (e.g. "99.9")
+         *
+         * <p>Type: TEXT
+         * @see #COLUMN_REVIEW_RATING_STYLE
+         */
+        String COLUMN_REVIEW_RATING = "review_rating";
     }
 
     /**
@@ -913,6 +1033,7 @@ public final class TvContractCompat {
         @IntDef({
                 ASPECT_RATIO_16_9,
                 ASPECT_RATIO_3_2,
+                ASPECT_RATIO_4_3,
                 ASPECT_RATIO_1_1,
                 ASPECT_RATIO_2_3,
         })
@@ -937,12 +1058,20 @@ public final class TvContractCompat {
         int ASPECT_RATIO_3_2 = 1;
 
         /**
+         * The aspect ratio for 4:3.
+         *
+         * @see #COLUMN_POSTER_ART_ASPECT_RATIO
+         * @see #COLUMN_THUMBNAIL_ASPECT_RATIO
+         */
+        int ASPECT_RATIO_4_3 = 2;
+
+        /**
          * The aspect ratio for 1:1.
          *
          * @see #COLUMN_POSTER_ART_ASPECT_RATIO
          * @see #COLUMN_THUMBNAIL_ASPECT_RATIO
          */
-        int ASPECT_RATIO_1_1 = 2;
+        int ASPECT_RATIO_1_1 = 3;
 
         /**
          * The aspect ratio for 2:3.
@@ -950,7 +1079,7 @@ public final class TvContractCompat {
          * @see #COLUMN_POSTER_ART_ASPECT_RATIO
          * @see #COLUMN_THUMBNAIL_ASPECT_RATIO
          */
-        int ASPECT_RATIO_2_3 = 3;
+        int ASPECT_RATIO_2_3 = 4;
 
         /** @hide */
         @IntDef({
@@ -1047,37 +1176,6 @@ public final class TvContractCompat {
          */
         int INTERACTION_TYPE_VIEWERS = 6;
 
-        /** @hide */
-        @IntDef({
-                REVIEW_RATING_STYLE_STARS,
-                REVIEW_RATING_STYLE_THUMBS_UP_DOWN,
-                REVIEW_RATING_STYLE_PERCENTAGE,
-        })
-        @Retention(RetentionPolicy.SOURCE)
-        @RestrictTo(LIBRARY_GROUP)
-        public @interface ReviewRatingStyle {}
-
-        /**
-         * The review rating style for five star rating.
-         *
-         * @see #COLUMN_REVIEW_RATING_STYLE
-         */
-        int REVIEW_RATING_STYLE_STARS = 0;
-
-        /**
-         * The review rating style for thumbs-up and thumbs-down rating.
-         *
-         * @see #COLUMN_REVIEW_RATING_STYLE
-         */
-        int REVIEW_RATING_STYLE_THUMBS_UP_DOWN = 1;
-
-        /**
-         * The review rating style for 0 to 100 point system.
-         *
-         * @see #COLUMN_REVIEW_RATING_STYLE
-         */
-        int REVIEW_RATING_STYLE_PERCENTAGE = 2;
-
         /**
          * The type of this program content.
          *
@@ -1108,6 +1206,7 @@ public final class TvContractCompat {
          * <p>The value should match one of the followings:
          * {@link #ASPECT_RATIO_16_9},
          * {@link #ASPECT_RATIO_3_2},
+         * {@link #ASPECT_RATIO_4_3},
          * {@link #ASPECT_RATIO_1_1}, and
          * {@link #ASPECT_RATIO_2_3}.
          *
@@ -1121,6 +1220,7 @@ public final class TvContractCompat {
          * <p>The value should match one of the followings:
          * {@link #ASPECT_RATIO_16_9},
          * {@link #ASPECT_RATIO_3_2},
+         * {@link #ASPECT_RATIO_4_3},
          * {@link #ASPECT_RATIO_1_1}, and
          * {@link #ASPECT_RATIO_2_3}.
          *
@@ -1186,7 +1286,8 @@ public final class TvContractCompat {
         /**
          * The release date of this TV program.
          *
-         * <p>The value should be in the form of either "yyyy-MM-dd" or "yyyy".
+         * <p>The value should be in one of the following formats:
+         * "yyyy", "yyyy-MM-dd", and "yyyy-MM-ddTHH:mm:ssZ" (UTC in ISO 8601).
          *
          * <p>Type: TEXT
          */
@@ -1228,8 +1329,7 @@ public final class TvContractCompat {
         /**
          * The URI for the preview video.
          *
-         * <p>This is only relevant to {@link Channels#TYPE_PREVIEW}. The data in the column must be
-         * a URL, or a URI in one of the following formats:
+         * <p>The data in the column must be a URL, or a URI in one of the following formats:
          *
          * <ul>
          * <li>content ({@link android.content.ContentResolver#SCHEME_CONTENT})</li>
@@ -1245,9 +1345,8 @@ public final class TvContractCompat {
         String COLUMN_PREVIEW_VIDEO_URI = "preview_video_uri";
 
         /**
-         * The last playback position (in milliseconds) of the preview video.
-         *
-         * <p>This is only relevant to {@link Channels#TYPE_PREVIEW}.
+         * The last playback position (in milliseconds) of the original content of this preview
+         * program.
          *
          * <p>Can be empty.
          *
@@ -1257,9 +1356,7 @@ public final class TvContractCompat {
                 "last_playback_position_millis";
 
         /**
-         * The duration (in milliseconds) of the preview video.
-         *
-         * <p>This is only relevant to {@link Channels#TYPE_PREVIEW}.
+         * The duration (in milliseconds) of the original content of this preview program.
          *
          * <p>Can be empty.
          *
@@ -1327,33 +1424,6 @@ public final class TvContractCompat {
         String COLUMN_AUTHOR = "author";
 
         /**
-         * The review rating score style used for {@link #COLUMN_REVIEW_RATING}.
-         *
-         * <p> The value should match one of the followings: {@link #REVIEW_RATING_STYLE_STARS},
-         * {@link #REVIEW_RATING_STYLE_THUMBS_UP_DOWN}, and {@link #REVIEW_RATING_STYLE_PERCENTAGE}.
-         *
-         * <p>Type: INTEGER
-         * @see #COLUMN_REVIEW_RATING
-         */
-        String COLUMN_REVIEW_RATING_STYLE = "review_rating_style";
-
-        /**
-         * The review rating score for this program.
-         *
-         * <p>The format of the value is dependent on {@link #COLUMN_REVIEW_RATING_STYLE}. If the
-         * style is {@link #REVIEW_RATING_STYLE_STARS}, the value should be a real number between
-         * 0.0 and 5.0. (e.g. "4.5") If the style is {@link #REVIEW_RATING_STYLE_THUMBS_UP_DOWN},
-         * the value should be two integers, one for thumbs-up count and the other for thumbs-down
-         * count, with a comma between them. (e.g. "200,40") If the style is
-         * {@link #REVIEW_RATING_STYLE_PERCENTAGE}, the value shoule be a real number between 0 and
-         * 100. (e.g. "99.9")
-         *
-         * <p>Type: TEXT
-         * @see #COLUMN_REVIEW_RATING_STYLE
-         */
-        String COLUMN_REVIEW_RATING = "review_rating";
-
-        /**
          * The flag indicating whether this TV program is browsable or not.
          *
          * <p>This column can only be set by applications having proper system permission. For
@@ -1388,7 +1458,12 @@ public final class TvContractCompat {
     /** Column definitions for the TV channels table. */
     public static final class Channels implements BaseTvColumns {
 
-        /** The content:// style URI for this table. */
+        /**
+         * The content:// style URI for this table.
+         *
+         * <p>SQL selection is not supported for {@link ContentResolver#query},
+         * {@link ContentResolver#update} and {@link ContentResolver#delete} operations.
+         */
         public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/"
                 + PATH_CHANNEL);
 
@@ -2200,7 +2275,12 @@ public final class TvContractCompat {
      */
     public static final class Programs implements BaseTvColumns, ProgramColumns {
 
-        /** The content:// style URI for this table. */
+        /**
+         * The content:// style URI for this table.
+         *
+         * <p>SQL selection is not supported for {@link ContentResolver#query},
+         * {@link ContentResolver#update} and {@link ContentResolver#delete} operations.
+         */
         public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/"
                 + PATH_PROGRAM);
 
@@ -2514,7 +2594,12 @@ public final class TvContractCompat {
      */
     public static final class RecordedPrograms implements BaseTvColumns, ProgramColumns {
 
-        /** The content:// style URI for this table. */
+        /**
+         * The content:// style URI for this table.
+         *
+         * <p>SQL selection is not supported for {@link ContentResolver#query},
+         * {@link ContentResolver#update} and {@link ContentResolver#delete} operations.
+         */
         public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/"
                 + PATH_RECORDED_PROGRAM);
 
@@ -2637,7 +2722,12 @@ public final class TvContractCompat {
     public static final class PreviewPrograms implements BaseTvColumns, ProgramColumns,
             PreviewProgramColumns {
 
-        /** The content:// style URI for this table. */
+        /**
+         * The content:// style URI for this table.
+         *
+         * <p>SQL selection is not supported for {@link ContentResolver#query},
+         * {@link ContentResolver#update} and {@link ContentResolver#delete} operations.
+         */
         public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/"
                 + PATH_PREVIEW_PROGRAM);
 
@@ -2681,7 +2771,12 @@ public final class TvContractCompat {
     public static final class WatchNextPrograms implements BaseTvColumns, ProgramColumns,
             PreviewProgramColumns {
 
-        /** The content:// style URI for this table. */
+        /**
+         * The content:// style URI for this table.
+         *
+         * <p>SQL selection is not supported for {@link ContentResolver#query},
+         * {@link ContentResolver#update} and {@link ContentResolver#delete} operations.
+         */
         public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/"
                 + PATH_WATCH_NEXT_PROGRAM);
 
@@ -2775,5 +2870,7 @@ public final class TvContractCompat {
          */
         public static final String COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS =
                 "last_engagement_time_utc_millis";
+
+        private WatchNextPrograms() {}
     }
 }

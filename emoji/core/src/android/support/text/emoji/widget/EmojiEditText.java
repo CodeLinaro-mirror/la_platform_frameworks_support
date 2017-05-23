@@ -18,13 +18,17 @@ package android.support.text.emoji.widget;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.os.Build;
+import android.support.annotation.IntRange;
+import android.support.annotation.Nullable;
+import android.support.text.emoji.EmojiCompat;
 import android.util.AttributeSet;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.widget.EditText;
 
 /**
- * EditText widget enhanced with emoji capability by using {@link EmojiEditTextHelper}.
+ * EditText widget enhanced with emoji capability by using {@link EmojiEditTextHelper}. When used
+ * on devices running API 18 or below, this widget acts as a regular {@link EditText}.
  */
 public class EmojiEditText extends EditText {
     private EmojiEditTextHelper mEmojiEditTextHelper;
@@ -32,29 +36,32 @@ public class EmojiEditText extends EditText {
 
     public EmojiEditText(Context context) {
         super(context);
-        init();
+        init(null /*attrs*/, 0 /*defStyleAttr*/);
     }
 
     public EmojiEditText(Context context, AttributeSet attrs) {
         super(context, attrs);
-        init();
+        init(attrs, android.R.attr.editTextStyle);
     }
 
     public EmojiEditText(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        init();
+        init(attrs, defStyleAttr);
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public EmojiEditText(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
-        init();
+        init(attrs, defStyleAttr);
     }
 
-    private void init() {
+    private void init(@Nullable AttributeSet attrs, int defStyleAttr) {
         if (!mInitialized) {
             mInitialized = true;
-            super.setKeyListener(getEmojiEditTextHelper().getKeyListener(getKeyListener()));
+            final EditTextAttributeHelper attrHelper = new EditTextAttributeHelper(this, attrs,
+                    defStyleAttr);
+            setMaxEmojiCount(attrHelper.getMaxEmojiCount());
+            setKeyListener(super.getKeyListener());
         }
     }
 
@@ -65,8 +72,32 @@ public class EmojiEditText extends EditText {
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-        InputConnection inputConnection = super.onCreateInputConnection(outAttrs);
+        final InputConnection inputConnection = super.onCreateInputConnection(outAttrs);
         return getEmojiEditTextHelper().onCreateInputConnection(inputConnection, outAttrs);
+    }
+
+    /**
+     * Set the maximum number of EmojiSpans to be added to a CharSequence. The number of spans in a
+     * CharSequence affects the performance of the EditText insert/delete operations. Insert/delete
+     * operations slow down as the number of spans increases.
+     *
+     * @param maxEmojiCount maximum number of EmojiSpans to be added to a single CharSequence,
+     *                      should be equal or greater than 0
+     *
+     * @see EmojiCompat#process(CharSequence, int, int, int)
+     */
+    public void setMaxEmojiCount(@IntRange(from = 0) int maxEmojiCount) {
+        getEmojiEditTextHelper().setMaxEmojiCount(maxEmojiCount);
+    }
+
+    /**
+     * Returns the maximum number of EmojiSpans to be added to a CharSequence.
+     *
+     * @see #setMaxEmojiCount(int)
+     * @see EmojiCompat#process(CharSequence, int, int, int)
+     */
+    public int getMaxEmojiCount() {
+        return getEmojiEditTextHelper().getMaxEmojiCount();
     }
 
     private EmojiEditTextHelper getEmojiEditTextHelper() {

@@ -28,27 +28,13 @@ LOCAL_USE_AAPT2 := true
 LOCAL_MODULE := android-support-emoji
 LOCAL_SDK_VERSION := $(SUPPORT_CURRENT_SDK_VERSION)
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
+LOCAL_RESOURCE_DIR := $(LOCAL_PATH)/res
 LOCAL_STATIC_JAVA_LIBRARIES := \
-    android-support-emoji-flatbuffers-jarjar
+    noto-emoji-compat-java
 LOCAL_SHARED_ANDROID_LIBRARIES := \
     android-support-annotations \
     android-support-compat
 LOCAL_JAR_EXCLUDE_FILES := none
 LOCAL_JAVA_LANGUAGE_VERSION := 1.7
 LOCAL_AAPT_FLAGS := --add-javadoc-annotation doconly
-include $(BUILD_STATIC_JAVA_LIBRARY)
-
-#############################################################
-# Pre-built dependency jars
-#############################################################
-
-include $(CLEAR_VARS)
-LOCAL_PREBUILT_STATIC_JAVA_LIBRARIES := \
-    android-support-emoji-flatbuffers:third_party/flatbuffers/flatbuffers-java-1.6.0.jar
-include $(BUILD_MULTI_PREBUILT)
-
-include $(CLEAR_VARS)
-LOCAL_STATIC_JAVA_LIBRARIES := android-support-emoji-flatbuffers
-LOCAL_JARJAR_RULES := $(LOCAL_PATH)/jarjar-rules.txt
-LOCAL_MODULE := android-support-emoji-flatbuffers-jarjar
 include $(BUILD_STATIC_JAVA_LIBRARY)

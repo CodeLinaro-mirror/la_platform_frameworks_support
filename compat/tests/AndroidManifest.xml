@@ -19,7 +19,7 @@
           package="android.support.compat.test">
     <uses-sdk
             android:minSdkVersion="14"
-            android:targetSdkVersion="23"
+            android:targetSdkVersion="26"
             tools:overrideLibrary="android.support.test, android.app, android.support.test.rule,
                       android.support.test.espresso, android.support.test.espresso.idling"/>
 
@@ -41,6 +41,15 @@
         <activity android:name="android.support.v4.view.ViewCompatActivity"/>
 
         <activity android:name="android.support.v4.app.TestSupportActivity" />
+
+        <provider android:name="android.support.v4.provider.MockFontProvider"
+                  android:authorities="android.provider.fonts.font"
+                  android:exported="false"
+                  android:multiprocess="true" />
+
+        <service android:name="android.support.v4.app.JobIntentServiceTest$TargetService"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
     </application>
 
 </manifest>

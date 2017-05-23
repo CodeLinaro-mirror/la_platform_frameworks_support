@@ -82,6 +82,7 @@ import java.util.List;
  * @attr name android:defaultValue
  * @attr name android:shouldDisableView
  * @attr name android:singleLineTitle
+ * @attr name android:iconSpaceReserved
  */
 public class Preference implements Comparable<Preference> {
     /**
@@ -142,7 +143,9 @@ public class Preference implements Comparable<Preference> {
 
     private boolean mAllowDividerAbove = true;
     private boolean mAllowDividerBelow = true;
+    private boolean mHasSingleLineTitleAttr;
     private boolean mSingleLineTitle = true;
+    private boolean mIconSpaceReserved;
 
     /**
      * @see #setShouldDisableView(boolean)
@@ -310,8 +313,14 @@ public class Preference implements Comparable<Preference> {
                 TypedArrayUtils.getBoolean(a, R.styleable.Preference_shouldDisableView,
                         R.styleable.Preference_android_shouldDisableView, true);
 
-        mSingleLineTitle = TypedArrayUtils.getBoolean(a, R.styleable.Preference_singleLineTitle,
+        mHasSingleLineTitleAttr = a.hasValue(R.styleable.Preference_singleLineTitle);
+        if (mHasSingleLineTitleAttr) {
+            mSingleLineTitle = TypedArrayUtils.getBoolean(a, R.styleable.Preference_singleLineTitle,
                 R.styleable.Preference_android_singleLineTitle, true);
+        }
+
+        mIconSpaceReserved = TypedArrayUtils.getBoolean(a, R.styleable.Preference_iconSpaceReserved,
+                R.styleable.Preference_android_iconSpaceReserved, false);
 
         a.recycle();
     }
@@ -556,7 +565,9 @@ public class Preference implements Comparable<Preference> {
             if (!TextUtils.isEmpty(title)) {
                 titleView.setText(title);
                 titleView.setVisibility(View.VISIBLE);
-                titleView.setSingleLine(mSingleLineTitle);
+                if (mHasSingleLineTitleAttr) {
+                    titleView.setSingleLine(mSingleLineTitle);
+                }
             } else {
                 titleView.setVisibility(View.GONE);
             }
@@ -583,7 +594,11 @@ public class Preference implements Comparable<Preference> {
                     imageView.setImageDrawable(mIcon);
                 }
             }
-            imageView.setVisibility(mIcon != null ? View.VISIBLE : View.GONE);
+            if (mIcon != null) {
+                imageView.setVisibility(View.VISIBLE);
+            } else {
+                imageView.setVisibility(mIconSpaceReserved ? View.INVISIBLE : View.GONE);
+            }
         }
 
         View imageFrame = holder.findViewById(R.id.icon_frame);
@@ -591,7 +606,11 @@ public class Preference implements Comparable<Preference> {
             imageFrame = holder.findViewById(AndroidResources.ANDROID_R_ICON_FRAME);
         }
         if (imageFrame != null) {
-            imageFrame.setVisibility(mIcon != null ? View.VISIBLE : View.GONE);
+            if (mIcon != null) {
+                imageFrame.setVisibility(View.VISIBLE);
+            } else {
+                imageFrame.setVisibility(mIconSpaceReserved ? View.INVISIBLE : View.GONE);
+            }
         }
 
         if (mShouldDisableView) {
@@ -995,6 +1014,32 @@ public class Preference implements Comparable<Preference> {
     }
 
     /**
+     * Sets whether to reserve the space of this Preference icon view when no icon is provided. If
+     * set to true, the preference will be offset as if it would have the icon and thus aligned with
+     * other preferences having icons.
+     *
+     * @param iconSpaceReserved set {@code true} if the space for the icon view should be reserved
+     *
+     * @attr ref R.styleable#Preference_android_iconSpaceReserved
+     */
+    public void setIconSpaceReserved(boolean iconSpaceReserved) {
+        mIconSpaceReserved = iconSpaceReserved;
+        notifyChanged();
+    }
+
+    /**
+     * Returns whether the space of this preference icon view is reserved.
+     *
+     * @see #setIconSpaceReserved(boolean)
+     * @return {@code true} if the space of this preference icon view is reserved
+     *
+     * @attr ref R.styleable#Preference_android_iconSpaceReserved
+     */
+    public boolean isIconSpaceReserved() {
+        return mIconSpaceReserved;
+    }
+
+    /**
      * Call this method after the user changes the preference, but before the
      * internal state is set. This allows the client to ignore the user value.
      *
@@ -1327,8 +1372,6 @@ public class Preference implements Comparable<Preference> {
      *
      * @param dependent The dependent Preference that will be enabled/disabled
      *            according to the state of this Preference.
-     * @return Returns the same Preference object, for chaining multiple calls
-     *         into a single statement.
      */
     private void unregisterDependent(Preference dependent) {
         if (mDependents != null) {
@@ -1518,7 +1561,7 @@ public class Preference implements Comparable<Preference> {
         }
 
         // Shouldn't store null
-        if (value == getPersistedString(null)) {
+        if (TextUtils.equals(value, getPersistedString(null))) {
             // It's already there, so the same as persisting
             return true;
         }
@@ -1785,7 +1828,7 @@ public class Preference implements Comparable<Preference> {
      * Returns the text that will be used to filter this Preference depending on
      * user input.
      * <p>
-     * If overridding and calling through to the superclass, make sure to prepend
+     * If overriding and calling through to the superclass, make sure to prepend
      * your additions with a space.
      *
      * @return Text as a {@link StringBuilder} that will be used to filter this

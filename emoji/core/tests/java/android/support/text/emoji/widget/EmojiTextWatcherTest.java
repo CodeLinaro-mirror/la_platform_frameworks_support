@@ -41,16 +41,15 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 public class EmojiTextWatcherTest {
 
-    private EditText mEditText;
     private EmojiTextWatcher mTextWatcher;
     private EmojiCompat mEmojiCompat;
 
     @Before
     public void setup() {
-        mEditText = mock(EditText.class);
+        final EditText editText = mock(EditText.class);
         mEmojiCompat = mock(EmojiCompat.class);
         EmojiCompat.reset(mEmojiCompat);
-        mTextWatcher = new EmojiTextWatcher(mEditText);
+        mTextWatcher = new EmojiTextWatcher(editText);
     }
 
     @Test
@@ -60,7 +59,8 @@ public class EmojiTextWatcherTest {
 
         mTextWatcher.onTextChanged(testString, 0, 0, 1);
 
-        verify(mEmojiCompat, times(1)).process(sameCharSequence(testString), eq(0), eq(1));
+        verify(mEmojiCompat, times(1)).process(sameCharSequence(testString), eq(0), eq(1),
+                eq(Integer.MAX_VALUE));
         verify(mEmojiCompat, times(0)).registerInitCallback(any(EmojiCompat.InitCallback.class));
     }
 
@@ -71,7 +71,7 @@ public class EmojiTextWatcherTest {
 
         mTextWatcher.onTextChanged(testString, 0, 0, 1);
 
-        verify(mEmojiCompat, times(0)).process(any(Spannable.class), anyInt(), anyInt());
+        verify(mEmojiCompat, times(0)).process(any(Spannable.class), anyInt(), anyInt(), anyInt());
         verify(mEmojiCompat, times(1)).registerInitCallback(any(EmojiCompat.InitCallback.class));
     }
 
@@ -82,7 +82,7 @@ public class EmojiTextWatcherTest {
 
         mTextWatcher.onTextChanged(testString, 0, 0, 1);
 
-        verify(mEmojiCompat, times(0)).process(any(Spannable.class), anyInt(), anyInt());
+        verify(mEmojiCompat, times(0)).process(any(Spannable.class), anyInt(), anyInt(), anyInt());
         verify(mEmojiCompat, times(0)).registerInitCallback(any(EmojiCompat.InitCallback.class));
     }
 }

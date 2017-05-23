@@ -326,7 +326,8 @@ public final class PlaybackStateCompat implements Parcelable {
     /**
      * @hide
      */
-    @IntDef({REPEAT_MODE_NONE, REPEAT_MODE_ONE, REPEAT_MODE_ALL})
+    @RestrictTo(LIBRARY_GROUP)
+    @IntDef({REPEAT_MODE_NONE, REPEAT_MODE_ONE, REPEAT_MODE_ALL, REPEAT_MODE_GROUP})
     @Retention(RetentionPolicy.SOURCE)
     public @interface RepeatMode {}
 
@@ -347,6 +348,42 @@ public final class PlaybackStateCompat implements Parcelable {
      * to indicate that the playback of the playing media list will be repeated.
      */
     public static final int REPEAT_MODE_ALL = 2;
+
+    /**
+     * Use this value with {@link MediaControllerCompat.TransportControls#setRepeatMode}
+     * to indicate that the playback of the playing media group will be repeated.
+     * A group is a logical block of media items which is specified in the section 5.7 of the
+     * Bluetooth AVRCP 1.6.
+     */
+    public static final int REPEAT_MODE_GROUP = 3;
+
+    /**
+     * @hide
+     */
+    @RestrictTo(LIBRARY_GROUP)
+    @IntDef({SHUFFLE_MODE_NONE, SHUFFLE_MODE_ALL, SHUFFLE_MODE_GROUP})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface ShuffleMode {}
+
+    /**
+     * Use this value with {@link MediaControllerCompat.TransportControls#setShuffleMode}
+     * to indicate that the media list will be played in order.
+     */
+    public static final int SHUFFLE_MODE_NONE = 0;
+
+    /**
+     * Use this value with {@link MediaControllerCompat.TransportControls#setShuffleMode}
+     * to indicate that the media list will be played in shuffled order.
+     */
+    public static final int SHUFFLE_MODE_ALL = 1;
+
+    /**
+     * Use this value with {@link MediaControllerCompat.TransportControls#setShuffleMode}
+     * to indicate that the media group will be played in shuffled order.
+     * A group is a logical block of media items which is specified in the section 5.7 of the
+     * Bluetooth AVRCP 1.6.
+     */
+    public static final int SHUFFLE_MODE_GROUP = 2;
 
     /**
      * @hide
@@ -777,11 +814,10 @@ public final class PlaybackStateCompat implements Parcelable {
                         mBufferedPosition,
                         mSpeed, mActions, mErrorMessage, mUpdateTime,
                         customActions, mActiveItemId, mExtras);
-            } else if (Build.VERSION.SDK_INT >= 21) {
-                // The extra conditional is necessary to pass the NewApi Lint inspection.
+            } else {
+                //noinspection AndroidLintNewApi - NewApi lint fails to handle nested checks.
                 mStateObj = PlaybackStateCompatApi21.newInstance(mState, mPosition,
-                        mBufferedPosition,
-                        mSpeed, mActions, mErrorMessage, mUpdateTime,
+                        mBufferedPosition, mSpeed, mActions, mErrorMessage, mUpdateTime,
                         customActions, mActiveItemId);
             }
         }

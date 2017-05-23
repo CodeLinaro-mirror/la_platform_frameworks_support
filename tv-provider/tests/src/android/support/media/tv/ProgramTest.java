@@ -28,6 +28,7 @@ import android.support.media.tv.TvContractCompat.Programs;
 import android.support.test.InstrumentationRegistry;
 import android.support.test.filters.SdkSuppress;
 import android.support.test.filters.SmallTest;
+import android.support.v4.os.BuildCompat;
 
 import junit.framework.TestCase;
 
@@ -143,6 +144,8 @@ public class ProgramTest extends TestCase {
                 .setInternalProviderFlag2(0x3)
                 .setInternalProviderFlag3(0x2)
                 .setInternalProviderFlag4(0x1)
+                .setReviewRatingStyle(Programs.REVIEW_RATING_STYLE_PERCENTAGE)
+                .setReviewRating("83.9")
                 .setChannelId(channelId)
                 .setStartTimeUtcMillis(0)
                 .setEndTimeUtcMillis(1000)
@@ -181,6 +184,10 @@ public class ProgramTest extends TestCase {
             assertTrue(Objects.equals(programA.getSeasonTitle(), programB.getSeasonTitle()));
             assertTrue(Objects.equals(programA.isRecordingProhibited(),
                     programB.isRecordingProhibited()));
+        }
+        if (BuildCompat.isAtLeastO()) {
+            assertEquals(programA.getReviewRatingStyle(), programB.getReviewRatingStyle());
+            assertEquals(programA.getReviewRating(), programB.getReviewRating());
         }
         assertEquals(programA.toString(), programB.toString());
         if (includeIdAndProtectedFields) {

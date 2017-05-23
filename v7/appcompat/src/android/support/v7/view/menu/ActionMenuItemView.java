@@ -193,8 +193,9 @@ public class ActionMenuItemView extends AppCompatTextView
         // Show the tooltip for items that do not already show text.
         final CharSequence contentDescription = mItemData.getContentDescription();
         if (TextUtils.isEmpty(contentDescription)) {
-            // Use the uncondensed title for content description.
-            setContentDescription(mItemData.getTitle());
+            // Use the uncondensed title for content description, but only if the title is not
+            // shown already.
+            setContentDescription(visible ? null : mItemData.getTitle());
         } else {
             setContentDescription(contentDescription);
         }
@@ -217,12 +218,12 @@ public class ActionMenuItemView extends AppCompatTextView
             if (width > mMaxIconSize) {
                 final float scale = (float) mMaxIconSize / width;
                 width = mMaxIconSize;
-                height *= scale;
+                height = (int) (width * scale);
             }
             if (height > mMaxIconSize) {
                 final float scale = (float) mMaxIconSize / height;
                 height = mMaxIconSize;
-                width *= scale;
+                width = (int) (width * scale);
             }
             icon.setBounds(0, 0, width, height);
         }

@@ -16,8 +16,17 @@
 
 package android.support.v4.app;
 
+import static android.support.v4.app.NotificationCompat.DEFAULT_ALL;
+import static android.support.v4.app.NotificationCompat.DEFAULT_LIGHTS;
+import static android.support.v4.app.NotificationCompat.DEFAULT_SOUND;
+import static android.support.v4.app.NotificationCompat.DEFAULT_VIBRATE;
+import static android.support.v4.app.NotificationCompat.GROUP_ALERT_ALL;
+import static android.support.v4.app.NotificationCompat.GROUP_ALERT_CHILDREN;
+import static android.support.v4.app.NotificationCompat.GROUP_ALERT_SUMMARY;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -25,6 +34,8 @@ import static org.junit.Assert.assertTrue;
 import android.annotation.TargetApi;
 import android.app.Notification;
 import android.content.Context;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.test.filters.SdkSuppress;
 import android.support.test.filters.SmallTest;
@@ -44,6 +55,7 @@ import java.util.ArrayList;
 public class NotificationCompatTest extends BaseInstrumentationTestCase<TestSupportActivity> {
     private static final String TEXT_RESULT_KEY = "text";
     private static final String DATA_RESULT_KEY = "data";
+    private static final String EXTRA_COLORIZED = "android.colorized";
 
     Context mContext;
 
@@ -54,6 +66,46 @@ public class NotificationCompatTest extends BaseInstrumentationTestCase<TestSupp
     @Before
     public void setup() {
         mContext = mActivityTestRule.getActivity();
+    }
+
+    @Test
+    public void testBadgeIcon() throws Throwable {
+        int badgeIcon = NotificationCompat.BADGE_ICON_SMALL;
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setBadgeIconType(badgeIcon)
+                .build();
+        if (BuildCompat.isAtLeastO()) {
+            assertEquals(badgeIcon, NotificationCompat.getBadgeIconType(n));
+        } else {
+            assertEquals(NotificationCompat.BADGE_ICON_NONE,
+                    NotificationCompat.getBadgeIconType(n));
+        }
+    }
+
+    @Test
+    public void testTimeout() throws Throwable {
+        long timeout = 23552;
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setTimeout(timeout)
+                .build();
+        if (BuildCompat.isAtLeastO()) {
+            assertEquals(timeout, NotificationCompat.getTimeout(n));
+        } else {
+            assertEquals(0, NotificationCompat.getTimeout(n));
+        }
+    }
+
+    @Test
+    public void testShortcutId() throws Throwable {
+        String shortcutId = "fgdfg";
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setShortcutId(shortcutId)
+                .build();
+        if (BuildCompat.isAtLeastO()) {
+            assertEquals(shortcutId, NotificationCompat.getShortcutId(n));
+        } else {
+            assertEquals(null, NotificationCompat.getShortcutId(n));
+        }
     }
 
     @Test
@@ -78,6 +130,33 @@ public class NotificationCompatTest extends BaseInstrumentationTestCase<TestSupp
             assertEquals(channelId, NotificationCompat.getChannel(n));
         } else {
             assertNull(NotificationCompat.getChannel(n));
+        }
+    }
+
+    @Test
+    public void testNotificationActionBuilder_assignsColorized() throws Throwable {
+        Notification n = newNotificationBuilder().setColorized(true).build();
+        if (BuildCompat.isAtLeastO()) {
+            Bundle extras = NotificationCompat.getExtras(n);
+            assertTrue(Boolean.TRUE.equals(extras.get(EXTRA_COLORIZED)));
+        }
+    }
+
+    @Test
+    public void testNotificationActionBuilder_unassignesColorized() throws Throwable {
+        Notification n = newNotificationBuilder().setColorized(false).build();
+        if (BuildCompat.isAtLeastO()) {
+            Bundle extras = NotificationCompat.getExtras(n);
+            assertTrue(Boolean.FALSE.equals(extras.get(EXTRA_COLORIZED)));
+        }
+    }
+
+    @Test
+    public void testNotificationActionBuilder_doesntAssignColorized() throws Throwable {
+        Notification n = newNotificationBuilder().build();
+        if (BuildCompat.isAtLeastO()) {
+            Bundle extras = NotificationCompat.getExtras(n);
+            assertFalse(extras.containsKey(EXTRA_COLORIZED));
         }
     }
 
@@ -202,6 +281,136 @@ public class NotificationCompatTest extends BaseInstrumentationTestCase<TestSupp
         NotificationCompat.MessagingStyle.Message fromBundle =
                 NotificationCompat.MessagingStyle.Message.getMessageFromBundle(bundleArray[0]);
         assertEquals(extraValue, fromBundle.getExtras().getCharSequence(extraKey));
+    }
+
+    @Test
+    public void testGetGroupAlertBehavior() throws Throwable {
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setGroupAlertBehavior(GROUP_ALERT_CHILDREN)
+                .build();
+        if (BuildCompat.isAtLeastO()) {
+            assertEquals(GROUP_ALERT_CHILDREN, NotificationCompat.getGroupAlertBehavior(n));
+        } else {
+            assertEquals(GROUP_ALERT_ALL, NotificationCompat.getGroupAlertBehavior(n));
+        }
+    }
+
+    @Test
+    public void testGroupAlertBehavior_mutesGroupNotifications() throws Throwable {
+        // valid between api 20, when groups were added, and api 25, the last to use sound
+        // and vibration from the notification itself
+
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setGroupAlertBehavior(GROUP_ALERT_CHILDREN)
+                .setVibrate(new long[] {235})
+                .setSound(Uri.EMPTY)
+                .setDefaults(DEFAULT_ALL)
+                .setGroup("grouped")
+                .setGroupSummary(true)
+                .build();
+
+        Notification n2 = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setGroupAlertBehavior(GROUP_ALERT_SUMMARY)
+                .setVibrate(new long[] {235})
+                .setSound(Uri.EMPTY)
+                .setDefaults(DEFAULT_ALL)
+                .setGroup("grouped")
+                .setGroupSummary(false)
+                .build();
+
+        if (Build.VERSION.SDK_INT >= 20 && !BuildCompat.isAtLeastO()) {
+            assertNull(n.sound);
+            assertNull(n.vibrate);
+            assertTrue((n.defaults & DEFAULT_LIGHTS) != 0);
+            assertTrue((n.defaults & DEFAULT_SOUND) == 0);
+            assertTrue((n.defaults & DEFAULT_VIBRATE) == 0);
+
+            assertNull(n2.sound);
+            assertNull(n2.vibrate);
+            assertTrue((n2.defaults & DEFAULT_LIGHTS) != 0);
+            assertTrue((n2.defaults & DEFAULT_SOUND) == 0);
+            assertTrue((n2.defaults & DEFAULT_VIBRATE) == 0);
+        } else if (Build.VERSION.SDK_INT < 20) {
+            assertNotNull(n.sound);
+            assertNotNull(n.vibrate);
+            assertTrue((n.defaults & DEFAULT_LIGHTS) != 0);
+            assertTrue((n.defaults & DEFAULT_SOUND) != 0);
+            assertTrue((n.defaults & DEFAULT_VIBRATE) != 0);
+
+            assertNotNull(n2.sound);
+            assertNotNull(n2.vibrate);
+            assertTrue((n2.defaults & DEFAULT_LIGHTS) != 0);
+            assertTrue((n2.defaults & DEFAULT_SOUND) != 0);
+            assertTrue((n2.defaults & DEFAULT_VIBRATE) != 0);
+        }
+    }
+
+    @Test
+    public void testGroupAlertBehavior_doesNotMuteIncorrectGroupNotifications() throws Throwable {
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setGroupAlertBehavior(GROUP_ALERT_SUMMARY)
+                .setVibrate(new long[] {235})
+                .setSound(Uri.EMPTY)
+                .setDefaults(DEFAULT_ALL)
+                .setGroup("grouped")
+                .setGroupSummary(true)
+                .build();
+
+        Notification n2 = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setGroupAlertBehavior(GROUP_ALERT_CHILDREN)
+                .setVibrate(new long[] {235})
+                .setSound(Uri.EMPTY)
+                .setDefaults(DEFAULT_ALL)
+                .setGroup("grouped")
+                .setGroupSummary(false)
+                .build();
+
+        Notification n3 = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setVibrate(new long[] {235})
+                .setSound(Uri.EMPTY)
+                .setDefaults(DEFAULT_ALL)
+                .setGroup("grouped")
+                .setGroupSummary(false)
+                .build();
+
+        if (Build.VERSION.SDK_INT >= 20 && !BuildCompat.isAtLeastO()) {
+            assertNotNull(n.sound);
+            assertNotNull(n.vibrate);
+            assertTrue((n.defaults & DEFAULT_LIGHTS) != 0);
+            assertTrue((n.defaults & DEFAULT_SOUND) != 0);
+            assertTrue((n.defaults & DEFAULT_VIBRATE) != 0);
+
+            assertNotNull(n2.sound);
+            assertNotNull(n2.vibrate);
+            assertTrue((n2.defaults & DEFAULT_LIGHTS) != 0);
+            assertTrue((n2.defaults & DEFAULT_SOUND) != 0);
+            assertTrue((n2.defaults & DEFAULT_VIBRATE) != 0);
+
+            assertNotNull(n3.sound);
+            assertNotNull(n3.vibrate);
+            assertTrue((n3.defaults & DEFAULT_LIGHTS) != 0);
+            assertTrue((n3.defaults & DEFAULT_SOUND) != 0);
+            assertTrue((n3.defaults & DEFAULT_VIBRATE) != 0);
+        }
+    }
+
+    @Test
+    public void testGroupAlertBehavior_doesNotMuteNonGroupNotifications() throws Throwable {
+        Notification n = new NotificationCompat.Builder(mActivityTestRule.getActivity())
+                .setGroupAlertBehavior(GROUP_ALERT_CHILDREN)
+                .setVibrate(new long[] {235})
+                .setSound(Uri.EMPTY)
+                .setDefaults(DEFAULT_ALL)
+                .setGroup(null)
+                .setGroupSummary(false)
+                .build();
+        if (!BuildCompat.isAtLeastO()) {
+            assertNotNull(n.sound);
+            assertNotNull(n.vibrate);
+            assertTrue((n.defaults & DEFAULT_LIGHTS) != 0);
+            assertTrue((n.defaults & DEFAULT_SOUND) != 0);
+            assertTrue((n.defaults & DEFAULT_VIBRATE) != 0);
+        }
     }
 
     private static RemoteInput newDataOnlyRemoteInput() {

@@ -30,6 +30,7 @@ import java.util.ArrayList;
 class NotificationCompatApi26 {
     public static class Builder implements NotificationBuilderWithBuilderAccessor,
             NotificationBuilderWithActions {
+
         private Notification.Builder mB;
 
         Builder(Context context, Notification n,
@@ -42,7 +43,8 @@ class NotificationCompatApi26 {
                 int visibility, Notification publicVersion, String groupKey, boolean groupSummary,
                 String sortKey, CharSequence[] remoteInputHistory, RemoteViews contentView,
                 RemoteViews bigContentView, RemoteViews headsUpContentView,
-                String channelId) {
+                String channelId, int badgeIcon, String shortcutId, long timeoutMs,
+                boolean colorized, boolean colorizedSet, int groupAlertBehavior) {
             mB = new Notification.Builder(context, channelId)
                     .setWhen(n.when)
                     .setShowWhen(showWhen)
@@ -78,7 +80,15 @@ class NotificationCompatApi26 {
                     .setColor(color)
                     .setVisibility(visibility)
                     .setPublicVersion(publicVersion)
-                    .setRemoteInputHistory(remoteInputHistory);
+                    .setRemoteInputHistory(remoteInputHistory)
+                    .setChannelId(channelId)
+                    .setBadgeIconType(badgeIcon)
+                    .setShortcutId(shortcutId)
+                    .setTimeoutAfter(timeoutMs)
+                    .setGroupAlertBehavior(groupAlertBehavior);
+            if (colorizedSet) {
+                mB.setColorized(colorized);
+            }
             if (contentView != null) {
                 mB.setCustomContentView(contentView);
             }
@@ -107,9 +117,5 @@ class NotificationCompatApi26 {
         public Notification build() {
             return mB.build();
         }
-    }
-
-    public static String getChannel(Notification n) {
-        return n.getChannel();
     }
 }

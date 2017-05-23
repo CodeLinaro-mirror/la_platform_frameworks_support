@@ -20,14 +20,16 @@ import static android.support.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.content.res.Resources;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.annotation.RestrictTo;
+import android.support.v4.os.BuildCompat;
 import android.support.v4.widget.TextViewCompat;
 import android.support.v7.appcompat.R;
-import android.support.v7.text.AllCapsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.util.AttributeSet;
 import android.util.TypedValue;
@@ -60,6 +62,7 @@ class AppCompatTextHelper {
     void loadFromAttributes(AttributeSet attrs, int defStyleAttr) {
         final Context context = mView.getContext();
         final AppCompatDrawableManager drawableManager = AppCompatDrawableManager.get();
+        final boolean shouldLoadFonts = shouldLoadFontResources(context);
 
         // First read the TextAppearance style id
         TintTypedArray a = TintTypedArray.obtainStyledAttributes(context, attrs,
@@ -94,6 +97,8 @@ class AppCompatTextHelper {
         ColorStateList textColor = null;
         ColorStateList textColorHint = null;
         ColorStateList textColorLink = null;
+        Typeface fontTypeface = null;
+        int style = Typeface.NORMAL;
 
         // First check TextAppearance's textAllCaps value
         if (ap != -1) {
@@ -101,6 +106,27 @@ class AppCompatTextHelper {
             if (!hasPwdTm && a.hasValue(R.styleable.TextAppearance_textAllCaps)) {
                 allCapsSet = true;
                 allCaps = a.getBoolean(R.styleable.TextAppearance_textAllCaps, false);
+            }
+            if (shouldLoadFonts) {
+                style = a.getInt(R.styleable.TextAppearance_android_textStyle, Typeface.NORMAL);
+
+                // If we're running on < API 26, we need to load font resources manually.
+                if (a.hasValue(R.styleable.TextAppearance_android_fontFamily)
+                        || a.hasValue(R.styleable.TextAppearance_fontFamily)) {
+                    int fontFamilyId = a.hasValue(R.styleable.TextAppearance_android_fontFamily)
+                            ? R.styleable.TextAppearance_android_fontFamily
+                            : R.styleable.TextAppearance_fontFamily;
+                    try {
+                        fontTypeface = a.getFont(fontFamilyId, style);
+                    } catch (UnsupportedOperationException | Resources.NotFoundException e) {
+                        // Expected if it is not a font resource.
+                    }
+                    if (fontTypeface == null) {
+                        // Try with String. This is done by TextView JB+, but fails in ICS
+                        String fontFamilyName = a.getString(fontFamilyId);
+                        fontTypeface = Typeface.create(fontFamilyName, style);
+                    }
+                }
             }
             if (Build.VERSION.SDK_INT < 23) {
                 // If we're running on < API 23, the text color may contain theme references
@@ -142,6 +168,27 @@ class AppCompatTextHelper {
                         R.styleable.TextAppearance_android_textColorLink);
             }
         }
+
+        if (shouldLoadFonts) {
+            // If we're running on < API 26, we need to load font resources manually.
+            if (a.hasValue(R.styleable.TextAppearance_android_fontFamily)
+                    || a.hasValue(R.styleable.TextAppearance_fontFamily)) {
+                int fontFamilyId = a.hasValue(R.styleable.TextAppearance_android_fontFamily)
+                        ? R.styleable.TextAppearance_android_fontFamily
+                        : R.styleable.TextAppearance_fontFamily;
+                style = a.getInt(R.styleable.TextAppearance_android_textStyle, Typeface.NORMAL);
+                try {
+                    fontTypeface = a.getFont(fontFamilyId, style);
+                } catch (UnsupportedOperationException | Resources.NotFoundException e) {
+                    // Expected if it is not a font resource.
+                }
+                if (fontTypeface == null) {
+                    // Try with String. This is done by TextView JB+, but fails in ICS
+                    String fontFamilyName = a.getString(fontFamilyId);
+                    fontTypeface = Typeface.create(fontFamilyName, style);
+                }
+            }
+        }
         a.recycle();
 
         if (textColor != null) {
@@ -156,10 +203,13 @@ class AppCompatTextHelper {
         if (!hasPwdTm && allCapsSet) {
             setAllCaps(allCaps);
         }
+        if (fontTypeface != null) {
+            mView.setTypeface(fontTypeface, style);
+        }
 
         mAutoSizeTextHelper.loadFromAttributes(attrs, defStyleAttr);
 
-        if (Build.VERSION.SDK_INT >= 26) {
+        if (BuildCompat.isAtLeastO()) {
             // Delegate auto-size functionality to the framework implementation.
             if (mAutoSizeTextHelper.getAutoSizeTextType()
                     != TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE) {
@@ -181,6 +231,11 @@ class AppCompatTextHelper {
                 }
             }
         }
+    }
+
+    private boolean shouldLoadFontResources(Context context) {
+        // We do not load fonts on restricted contexts for security reasons.
+        return !context.isRestricted();
     }
 
     void onSetTextAppearance(Context context, int resId) {
@@ -207,9 +262,7 @@ class AppCompatTextHelper {
     }
 
     void setAllCaps(boolean allCaps) {
-        mView.setTransformationMethod(allCaps
-                ? new AllCapsTransformationMethod(mView.getContext())
-                : null);
+        mView.setAllCaps(allCaps);
     }
 
     void applyCompoundDrawablesTints() {
@@ -245,7 +298,7 @@ class AppCompatTextHelper {
     @RestrictTo(LIBRARY_GROUP)
     void onLayout(boolean changed, int left, int top, int right, int bottom) {
         // Auto-size is supported by the framework starting from Android O.
-        if (Build.VERSION.SDK_INT < 26) {
+        if (!BuildCompat.isAtLeastO()) {
             if (isAutoSizeEnabled()) {
                 if (getNeedsAutoSizeText()) {
                     // Call auto-size after the width and height have been calculated.
@@ -261,12 +314,10 @@ class AppCompatTextHelper {
     /** @hide */
     @RestrictTo(LIBRARY_GROUP)
     void setTextSize(int unit, float size) {
-        if (Build.VERSION.SDK_INT < 26) {
+        if (!BuildCompat.isAtLeastO()) {
             if (!isAutoSizeEnabled()) {
                 setTextSizeInternal(unit, size);
             }
-        } else {
-            mView.setTextSize(unit, size);
         }
     }
 

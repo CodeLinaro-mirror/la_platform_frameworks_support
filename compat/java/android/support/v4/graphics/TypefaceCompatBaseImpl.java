@@ -19,27 +19,26 @@ package android.support.v4.graphics;
 import static android.support.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.graphics.Typeface;
-import android.os.Bundle;
-import android.os.Handler;
+import android.net.Uri;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
 import android.support.annotation.RestrictTo;
-import android.support.annotation.VisibleForTesting;
-import android.support.v4.graphics.fonts.FontRequest;
-import android.support.v4.graphics.fonts.FontResult;
-import android.support.v4.os.ResultReceiver;
-import android.support.v4.provider.FontsContract;
+import android.support.v4.content.res.FontResourcesParserCompat.FontFamilyFilesResourceEntry;
+import android.support.v4.content.res.FontResourcesParserCompat.FontFileResourceEntry;
+import android.support.v4.provider.FontsContractCompat.FontInfo;
 import android.support.v4.util.LruCache;
 import android.util.Log;
 
+import java.io.Closeable;
 import java.io.File;
-import java.io.FileDescriptor;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
+import java.nio.ByteBuffer;
+import java.util.Map;
 
 /**
  * Implementation of the Typeface compat methods for API 14 and above.
@@ -49,15 +48,13 @@ import java.util.List;
 @RequiresApi(14)
 class TypefaceCompatBaseImpl implements TypefaceCompat.TypefaceCompatImpl {
     private static final String TAG = "TypefaceCompatBaseImpl";
-    private static final String FONT_FILE = "tmp_font_file";
+    private static final String CACHE_FILE_PREFIX = "cached_font_";
 
     /**
      * Cache for Typeface objects dynamically loaded from assets. Currently max size is 16.
      */
-    private static final LruCache<String, Typeface> sDynamicTypefaceCache = new LruCache<>(16);
-    private static final Object sLock = new Object();
-    private static FontsContract sFontsContract;
-    private static Handler sHandler;
+    private static final LruCache<String, Typeface> sDynamicTypefaceCache =
+            new LruCache<>(16);
 
     private final Context mApplicationContext;
 
@@ -65,114 +62,17 @@ class TypefaceCompatBaseImpl implements TypefaceCompat.TypefaceCompatImpl {
         mApplicationContext = context.getApplicationContext();
     }
 
-    /**
-     * Create a typeface object given a font request. The font will be asynchronously fetched,
-     * therefore the result is delivered to the given callback. See {@link FontRequest}.
-     * Only one of the methods in callback will be invoked, depending on whether the request
-     * succeeds or fails. These calls will happen on the main thread.
-     * @param request A {@link FontRequest} object that identifies the provider and query for the
-     *                request. May not be null.
-     * @param callback A callback that will be triggered when results are obtained. May not be null.
-     */
-    public void create(@NonNull final FontRequest request,
-            @NonNull final TypefaceCompat.FontRequestCallback callback) {
-        final Typeface cachedTypeface = findFromCache(
-                request.getProviderAuthority(), request.getQuery());
-        if (cachedTypeface != null) {
-            sHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    callback.onTypefaceRetrieved(cachedTypeface);
-                }
-            });
-            return;
-        }
-        synchronized (sLock) {
-            if (sFontsContract == null) {
-                sFontsContract = new FontsContract(mApplicationContext);
-                sHandler = new Handler();
-            }
-            final ResultReceiver receiver = new ResultReceiver(null) {
-                @Override
-                public void onReceiveResult(final int resultCode, final Bundle resultData) {
-                    sHandler.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            receiveResult(request, callback, resultCode, resultData);
-                        }
-                    });
-                }
-            };
-            sFontsContract.getFont(request, receiver);
-        }
-    }
-
-    private static Typeface findFromCache(String providerAuthority, String query) {
-        synchronized (sDynamicTypefaceCache) {
-            final String key = createProviderUid(providerAuthority, query);
-            Typeface typeface = sDynamicTypefaceCache.get(key);
-            if (typeface != null) {
-                return typeface;
-            }
-        }
-        return null;
-    }
-
-    static void putInCache(String providerAuthority, String query, Typeface typeface) {
-        synchronized (sDynamicTypefaceCache) {
-            String key = createProviderUid(providerAuthority, query);
-            sDynamicTypefaceCache.put(key, typeface);
-        }
-    }
-
-    @VisibleForTesting
-    void receiveResult(FontRequest request,
-            TypefaceCompat.FontRequestCallback callback, int resultCode, Bundle resultData) {
-        Typeface cachedTypeface = findFromCache(
-                request.getProviderAuthority(), request.getQuery());
-        if (cachedTypeface != null) {
-            // We already know the result.
-            // Probably the requester requests the same font again in a short interval.
-            callback.onTypefaceRetrieved(cachedTypeface);
-            return;
-        }
-        if (resultCode != FontsContract.Columns.RESULT_CODE_OK) {
-            callback.onTypefaceRequestFailed(resultCode);
-            return;
-        }
-        if (resultData == null) {
-            callback.onTypefaceRequestFailed(
-                    TypefaceCompat.FontRequestCallback.FAIL_REASON_FONT_NOT_FOUND);
-            return;
-        }
-        List<FontResult> resultList =
-                resultData.getParcelableArrayList(FontsContract.PARCEL_FONT_RESULTS);
-        if (resultList == null || resultList.isEmpty()) {
-            callback.onTypefaceRequestFailed(
-                    TypefaceCompat.FontRequestCallback.FAIL_REASON_FONT_NOT_FOUND);
-            return;
-        }
-
-        Typeface typeface = createTypeface(resultList);
-
-        if (typeface == null) {
-            Log.e(TAG, "Error creating font " + request.getQuery());
-            callback.onTypefaceRequestFailed(
-                    TypefaceCompat.FontRequestCallback.FAIL_REASON_FONT_LOAD_ERROR);
-            return;
-        }
-        putInCache(request.getProviderAuthority(), request.getQuery(), typeface);
-        callback.onTypefaceRetrieved(typeface);
-    }
-
-    /**
-     * To be overriden by other implementations according to available APIs.
-     * @param resultList a list of results, guaranteed to be non-null and non empty.
-     */
-    Typeface createTypeface(List<FontResult> resultList) {
+    @Override
+    public Typeface createTypeface(
+            @NonNull FontInfo[] fonts, Map<Uri, ByteBuffer> uriBuffer) {
         // When we load from file, we can only load one font so just take the first one.
+        if (fonts.length < 1) {
+            return null;
+        }
         Typeface typeface = null;
-        File tmpFile = copyToCacheFile(resultList.get(0).getFileDescriptor().getFileDescriptor());
+        FontInfo font = fonts[0];
+        ByteBuffer buffer = uriBuffer.get(font.getUri());
+        File tmpFile = copyToCacheFile(buffer);
         if (tmpFile != null) {
             try {
                 typeface = Typeface.createFromFile(tmpFile.getPath());
@@ -188,26 +88,48 @@ class TypefaceCompatBaseImpl implements TypefaceCompat.TypefaceCompatImpl {
         return typeface;
     }
 
-    private File copyToCacheFile(final FileDescriptor fd) {
-        final File cacheFile = new File(mApplicationContext.getCacheDir(),
-                FONT_FILE + Thread.currentThread().getId());
-        final InputStream is = new FileInputStream(fd);
+    private File copyToCacheFile(final InputStream is) {
+        FileOutputStream fos = null;
+        File cacheFile;
         try {
-            final FileOutputStream fos = new FileOutputStream(cacheFile, false);
-            try {
-                byte[] buffer = new byte[1024];
-                int readLen;
-                while ((readLen = is.read(buffer)) != -1) {
-                    fos.write(buffer, 0, readLen);
-                }
-            } finally {
-                fos.close();
+            cacheFile = new File(mApplicationContext.getCacheDir(),
+                    CACHE_FILE_PREFIX + Thread.currentThread().getId());
+            fos = new FileOutputStream(cacheFile, false);
+
+            byte[] buffer = new byte[1024];
+            int readLen;
+            while ((readLen = is.read(buffer)) != -1) {
+                fos.write(buffer, 0, readLen);
             }
         } catch (IOException e) {
             Log.e(TAG, "Error copying font file descriptor to temp local file.", e);
             return null;
         } finally {
             closeQuietly(is);
+            closeQuietly(fos);
+        }
+        return cacheFile;
+    }
+
+    private File copyToCacheFile(final ByteBuffer is) {
+        FileOutputStream fos = null;
+        File cacheFile;
+        try {
+            cacheFile = new File(mApplicationContext.getCacheDir(),
+                    CACHE_FILE_PREFIX + Thread.currentThread().getId());
+            fos = new FileOutputStream(cacheFile, false);
+
+            byte[] buffer = new byte[1024];
+            while (is.hasRemaining()) {
+                int len = Math.min(1024, is.remaining());
+                is.get(buffer, 0, len);
+                fos.write(buffer, 0, len);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error copying font file descriptor to temp local file.", e);
+            return null;
+        } finally {
+            closeQuietly(fos);
         }
         return cacheFile;
     }
@@ -222,10 +144,126 @@ class TypefaceCompatBaseImpl implements TypefaceCompat.TypefaceCompatImpl {
         }
     }
 
+    @Nullable
+    @Override
+    public Typeface createFromResourcesFontFile(Resources resources, int id, int style) {
+        InputStream is = null;
+        try {
+            is = resources.openRawResource(id);
+            Typeface typeface = createTypeface(resources, is);
+            if (typeface == null) {
+                return null;
+            }
+            final String key = createAssetUid(resources, id, style);
+            sDynamicTypefaceCache.put(key, typeface);
+            return typeface;
+        } catch (IOException e) {
+            return null;
+        } finally {
+            closeQuietly(is);
+        }
+    }
+
+    @Nullable
+    @Override
+    public Typeface createFromFontFamilyFilesResourceEntry(
+            FontFamilyFilesResourceEntry filesEntry, Resources resources, int id, int style) {
+        Typeface typeface = createFromResources(filesEntry, resources, id, style);
+        if (typeface != null) {
+            final String key = createAssetUid(resources, id, style);
+            sDynamicTypefaceCache.put(key, typeface);
+        }
+        return typeface;
+    }
+
+    private FontFileResourceEntry findBestEntry(FontFamilyFilesResourceEntry entry,
+            int targetWeight, boolean isTargetItalic) {
+        FontFileResourceEntry bestEntry = null;
+        int bestScore = Integer.MAX_VALUE;  // smaller is better
+
+        for (final FontFileResourceEntry e : entry.getEntries()) {
+            final int score = (Math.abs(e.getWeight() - targetWeight) * 2)
+                    + (isTargetItalic == e.isItalic() ? 0 : 1);
+
+            if (bestEntry == null || bestScore > score) {
+                bestEntry = e;
+                bestScore = score;
+            }
+        }
+        return bestEntry;
+    }
+
     /**
-     * Creates a unique id for a given font provider and query.
+     * Implementation of resources font retrieval for a file type xml resource. This should be
+     * overriden by other implementations.
      */
-    private static String createProviderUid(String authority, String query) {
-        return "provider:" + authority + "-" + query;
+    @Nullable
+    Typeface createFromResources(FontFamilyFilesResourceEntry entry, Resources resources,
+            int id, int style) {
+        FontFileResourceEntry best = findBestEntry(
+                entry, ((style & Typeface.BOLD) == 0) ? 400 : 700, (style & Typeface.ITALIC) != 0);
+        if (best == null) {
+            return null;
+        }
+
+        InputStream is = null;
+        try {
+            is = resources.openRawResource(best.getResourceId());
+            return createTypeface(resources, is);
+        } catch (IOException e) {
+            // This is fine. The resource can be string type which indicates a name of Typeface.
+        } finally {
+            closeQuietly(is);
+        }
+        return null;
+    }
+
+    @Override
+    public Typeface findFromCache(Resources resources, int id, int style) {
+        final String key = createAssetUid(resources, id, style);
+        synchronized (sDynamicTypefaceCache) {
+            return sDynamicTypefaceCache.get(key);
+        }
+    }
+
+    /**
+     * Creates a unique id for a given AssetManager and asset id
+     *
+     * @param resources Resources instance
+     * @param id a resource id
+     * @param style a style to be used for this resource, -1 if not avaialble.
+     * @return Unique id for a given AssetManager and id
+     */
+    private static String createAssetUid(final Resources resources, int id, int style) {
+        return resources.getResourcePackageName(id) + "-" + id + "-" + style;
+    }
+
+    // Caller must close "is"
+    Typeface createTypeface(Resources resources, InputStream is) throws IOException {
+        File tmpFile = copyToCacheFile(is);
+        if (tmpFile != null) {
+            try {
+                return Typeface.createFromFile(tmpFile.getPath());
+            } catch (RuntimeException e) {
+                // This was thrown from Typeface.createFromFile when a Typeface could not be loaded,
+                // such as due to an invalid ttf or unreadable file. We don't want to throw that
+                // exception anymore.
+                android.util.Log.e(TAG, "Failed to create font", e);
+                return null;
+            } finally {
+                tmpFile.delete();
+            }
+        }
+        return null;
+    }
+
+    static void closeQuietly(Closeable stream) {
+        if (stream != null) {
+            try {
+                stream.close();
+            } catch (IOException io) {
+                Log.e(TAG, "Error closing stream", io);
+            }
+        }
     }
 }
