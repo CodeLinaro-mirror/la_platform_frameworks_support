@@ -45,6 +45,7 @@ import android.text.Editable;
 import android.text.Selection;
 import android.text.SpannableStringBuilder;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import android.widget.TextView;
 
 import org.junit.Before;
@@ -54,9 +55,11 @@ import org.junit.runner.RunWith;
 
 @SmallTest
 @RunWith(AndroidJUnit4.class)
+@SdkSuppress(minSdkVersion = 19)
+@TargetApi(19)
 public class EmojiInputConnectionTest {
 
-    private android.view.inputmethod.InputConnection mInputConnection;
+    private InputConnection mInputConnection;
     private TestString mTestString;
     private Editable mEditable;
     private EmojiInputConnection mEmojiEmojiInputConnection;
@@ -70,7 +73,7 @@ public class EmojiInputConnectionTest {
     public void setup() {
         mTestString = new TestString(Emoji.EMOJI_WITH_ZWJ).withPrefix().withSuffix();
         mEditable = new SpannableStringBuilder(mTestString.toString());
-        mInputConnection = mock(android.view.inputmethod.InputConnection.class);
+        mInputConnection = mock(InputConnection.class);
         final Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         final TextView textView = spy(new TextView(context));
         EmojiCompat.get().process(mEditable);

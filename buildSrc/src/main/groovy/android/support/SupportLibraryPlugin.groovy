@@ -17,7 +17,6 @@
 package android.support
 
 import com.android.build.gradle.LibraryExtension
-import com.android.build.gradle.api.AndroidSourceSet
 import com.android.build.gradle.api.LibraryVariant
 import com.android.builder.core.BuilderConstants
 import com.google.common.collect.ImmutableMap
@@ -57,12 +56,6 @@ class SupportLibraryPlugin implements Plugin<Project> {
 
             // Set test related options.
             testInstrumentationRunner INSTRUMENTATION_RUNNER
-        }
-
-        // A workaround for b.android.com/293641 where Android Gradle Plugin delays Jacoco
-        // dependency resolution if it is not set explicitly.
-        project.dependencies {
-            androidJacocoAnt "org.jacoco:org.jacoco.ant:0.7.5.201505241946"
         }
 
         library.signingConfigs {
@@ -112,11 +105,6 @@ class SupportLibraryPlugin implements Plugin<Project> {
         library.compileOptions {
             sourceCompatibility JavaVersion.VERSION_1_7
             targetCompatibility JavaVersion.VERSION_1_7
-        }
-
-        if (project.rootProject.usingFullSdk) {
-            // Library projects don't run lint by default, so set up dependency.
-            project.tasks.release.dependsOn project.tasks.lint
         }
 
         // Create sources jar for release builds
@@ -182,6 +170,11 @@ class SupportLibraryPlugin implements Plugin<Project> {
             });
         }
 
+        if (project.rootProject.usingFullSdk) {
+            // Library projects don't run lint by default, so set up dependency.
+            uploadTask.dependsOn project.tasks.lint
+        }
+
         final ErrorProneToolChain toolChain = ErrorProneToolChain.create(project);
         library.getBuildTypes().create("errorProne")
         library.getLibraryVariants().all(new Action<LibraryVariant>() {
@@ -190,12 +183,13 @@ class SupportLibraryPlugin implements Plugin<Project> {
                 if (libraryVariant.getBuildType().getName().equals("errorProne")) {
                     libraryVariant.getJavaCompile().setToolChain(toolChain);
 
-                    // TODO(aurimas): remove this once all these warnings are fixed.
                     libraryVariant.getJavaCompile().options.compilerArgs += [
-                            '-Xep:ArrayToString:WARN',
+                            // TODO(aurimas): remove this once all these warnings are fixed.
                             '-Xep:RectIntersectReturnValueIgnored:WARN',
-                            '-Xep:FallThrough:WARN',
-                            '-XDcompilePolicy=simple' // Workaround for b/36098770
+                            '-XDcompilePolicy=simple', // Workaround for b/36098770
+
+                            // Enforce the following checks.
+                            '-Xep:MissingOverride:ERROR',
                     ]
                 }
             }

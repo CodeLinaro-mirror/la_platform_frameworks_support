@@ -17,6 +17,7 @@ package android.support.text.emoji.widget;
 
 import static android.support.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
+import android.support.annotation.RequiresApi;
 import android.support.annotation.RestrictTo;
 import android.support.text.emoji.EmojiCompat;
 import android.support.text.emoji.EmojiCompat.InitCallback;
@@ -34,12 +35,23 @@ import java.lang.ref.WeakReference;
  * @hide
  */
 @RestrictTo(LIBRARY_GROUP)
+@RequiresApi(19)
 final class EmojiTextWatcher implements android.text.TextWatcher {
+    static final int MAX_EMOJI_COUNT = Integer.MAX_VALUE;
     private final EditText mEditText;
     private InitCallback mInitCallback;
+    private int mMaxEmojiCount = MAX_EMOJI_COUNT;
 
     EmojiTextWatcher(EditText editText) {
         mEditText = editText;
+    }
+
+    void setMaxEmojiCount(int maxEmojiCount) {
+        this.mMaxEmojiCount = maxEmojiCount;
+    }
+
+    int getMaxEmojiCount() {
+        return mMaxEmojiCount;
     }
 
     @Override
@@ -54,7 +66,7 @@ final class EmojiTextWatcher implements android.text.TextWatcher {
             switch (EmojiCompat.get().getLoadState()){
                 case EmojiCompat.LOAD_STATE_SUCCESS:
                     final Spannable s = (Spannable) charSequence;
-                    EmojiCompat.get().process(s, start, start + after);
+                    EmojiCompat.get().process(s, start, start + after, mMaxEmojiCount);
                     break;
                 case EmojiCompat.LOAD_STATE_LOADING:
                     EmojiCompat.get().registerInitCallback(getInitCallback());

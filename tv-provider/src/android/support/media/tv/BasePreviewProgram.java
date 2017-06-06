@@ -36,6 +36,7 @@ import java.net.URISyntaxException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Objects;
+import java.util.TimeZone;
 
 /**
  * Base class for derived classes that want to have common fields for preview programs.
@@ -544,7 +545,12 @@ public abstract class BasePreviewProgram extends BaseProgram {
      * @param <T> The Builder of the derived classe.
      */
     public abstract static class Builder<T extends Builder> extends BaseProgram.Builder<T> {
-        private static final SimpleDateFormat sFormat = new SimpleDateFormat("yyyy-MM-dd");
+        private static final SimpleDateFormat sFormat =
+                new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+
+        static {
+            sFormat.setTimeZone(TimeZone.getTimeZone("GMT-0"));
+        }
 
         private String mExternalId;
         private Uri mPreviewVideoUri;
@@ -806,7 +812,8 @@ public abstract class BasePreviewProgram extends BaseProgram {
         /**
          * Sets the release date of this TV program.
          *
-         * <p>The value should be in the form of either "yyyy-MM-dd" or "yyyy".
+         * <p>The value should be in one of the following formats:
+         * "yyyy", "yyyy-MM-dd", and "yyyy-MM-ddTHH:mm:ssZ" (UTC in ISO 8601).
          *
          * @param releaseDate The release date of the program.
          * @return This Builder object to allow for chaining of calls to builder methods.

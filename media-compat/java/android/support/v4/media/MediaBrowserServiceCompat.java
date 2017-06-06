@@ -116,6 +116,8 @@ public abstract class MediaBrowserServiceCompat extends Service {
     static final String TAG = "MBServiceCompat";
     static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
 
+    private static final float EPSILON = 0.00001f;
+
     private MediaBrowserServiceImpl mImpl;
 
     /**
@@ -307,9 +309,11 @@ public abstract class MediaBrowserServiceCompat extends Service {
                 rootExtras = new Bundle();
                 rootExtras.putInt(EXTRA_SERVICE_VERSION, SERVICE_VERSION_CURRENT);
                 BundleCompat.putBinder(rootExtras, EXTRA_MESSENGER_BINDER, mMessenger.getBinder());
-                IMediaSession extraBinder = mSession.getExtraBinder();
-                BundleCompat.putBinder(rootExtras, EXTRA_SESSION_BINDER,
-                        extraBinder == null ? null : extraBinder.asBinder());
+                if (mSession != null) {
+                    IMediaSession extraBinder = mSession.getExtraBinder();
+                    BundleCompat.putBinder(rootExtras, EXTRA_SESSION_BINDER,
+                            extraBinder == null ? null : extraBinder.asBinder());
+                }
             }
             BrowserRoot root = MediaBrowserServiceCompat.this.onGetRoot(
                     clientPackageName, clientUid, rootHints);
@@ -529,7 +533,7 @@ public abstract class MediaBrowserServiceCompat extends Service {
     /**
      * All the info about a connection.
      */
-    private class ConnectionRecord {
+    private static class ConnectionRecord {
         String pkg;
         Bundle rootHints;
         ServiceCallbacks callbacks;
@@ -595,6 +599,7 @@ public abstract class MediaBrowserServiceCompat extends Service {
                 throw new IllegalStateException("sendProgressUpdate() called when either "
                         + "sendResult() or sendError() had already been called for: " + mDebug);
             }
+            checkExtraFields(extras);
             mSendProgressUpdateCalled = true;
             onProgressUpdateSent(extras);
         }
@@ -668,6 +673,19 @@ public abstract class MediaBrowserServiceCompat extends Service {
         void onErrorSent(Bundle extras) {
             throw new UnsupportedOperationException("It is not supported to send an error for "
                     + mDebug);
+        }
+
+        private void checkExtraFields(Bundle extras) {
+            if (extras == null) {
+                return;
+            }
+            if (extras.containsKey(MediaBrowserCompat.EXTRA_DOWNLOAD_PROGRESS)) {
+                float value = extras.getFloat(MediaBrowserCompat.EXTRA_DOWNLOAD_PROGRESS);
+                if (value < -EPSILON || value > 1.0f + EPSILON) {
+                    throw new IllegalArgumentException("The value of the EXTRA_DOWNLOAD_PROGRESS "
+                            + "field must be a float number within [0.0, 1.0].");
+                }
+            }
         }
     }
 
@@ -1108,6 +1126,8 @@ public abstract class MediaBrowserServiceCompat extends Service {
      * @param action The custom action sent from the media browser.
      * @param extras The bundle of service-specific arguments sent from the media browser.
      * @param result The {@link Result} to send the result of the requested custom action.
+     * @see MediaBrowserCompat#CUSTOM_ACTION_DOWNLOAD
+     * @see MediaBrowserCompat#CUSTOM_ACTION_REMOVE_DOWNLOADED_FILE
      */
     public void onCustomAction(@NonNull String action, Bundle extras,
             @NonNull Result<Bundle> result) {

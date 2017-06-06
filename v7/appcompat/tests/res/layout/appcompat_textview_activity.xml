@@ -119,17 +119,47 @@
             android:text="@string/text_link_disabled" />
 
         <android.support.v7.widget.AppCompatTextView
+            android:id="@+id/textview_fontresource_fontfamily_string_direct"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sample_text1"
+            app:fontFamily="sans-serif" />
+
+        <android.support.v7.widget.AppCompatTextView
+            android:id="@+id/textview_fontresource_fontfamily_string_resource"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/sample_text1"
+            app:fontFamily="@string/font_sans_serif" />
+
+        <android.support.v7.widget.AppCompatTextView
             android:id="@+id/textview_fontresource_fontfamily"
             android:text="@string/sample_text1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="@font/samplefont" />
+            app:fontFamily="@font/samplefont" />
 
         <android.support.v7.widget.AppCompatTextView
             android:id="@+id/textview_fontxmlresource_fontfamily"
             android:text="@string/sample_text1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            app:fontFamily="@font/samplexmlfont" />
+
+        <android.support.v7.widget.AppCompatTextView
+            android:id="@+id/textview_fontxmlresource_fontfamily_textstyle"
+            android:text="@string/sample_text1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textStyle="italic"
+            app:fontFamily="@font/samplexmlfont" />
+
+        <android.support.v7.widget.AppCompatTextView
+            android:id="@+id/textview_fontxmlresource_fontfamily_textstyle2"
+            android:text="@string/sample_text1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textStyle="italic"
             android:fontFamily="@font/samplexmlfont" />
 
         <!-- This is here to test that the TextView constructor ignores references to
@@ -139,7 +169,7 @@
             android:text="@string/sample_text1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="@style/TextView_FontResource" />
+            app:fontFamily="@style/TextView_FontResource" />
 
         <android.support.v7.widget.AppCompatTextView
             android:id="@+id/textview_fontresource_style"
@@ -168,6 +198,20 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TextView_FontXmlResource" />
+
+        <android.support.v7.widget.AppCompatTextView
+            android:id="@+id/textview_textStyleOverride"
+            android:text="@string/sample_text1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/TextView_TextStyleOverride" />
+
+        <android.support.v7.widget.AppCompatTextView
+            android:id="@+id/textview_textStyleDirect"
+            android:text="@string/sample_text1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textStyle="italic" />
 
     </LinearLayout>
 

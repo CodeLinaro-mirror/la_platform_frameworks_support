@@ -21,9 +21,12 @@ import static junit.framework.Assert.fail;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.AdditionalMatchers.lt;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyFloat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -32,6 +35,7 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 import android.os.SystemClock;
 import android.support.animation.DynamicAnimation;
 import android.support.animation.FloatPropertyCompat;
+import android.support.animation.FloatValueHolder;
 import android.support.animation.SpringAnimation;
 import android.support.animation.SpringForce;
 import android.support.dynamicanimation.test.R;
@@ -108,28 +112,25 @@ public class SpringTests {
      * Test that spring animation can work with a single property without an object.
      */
     @Test
-    public void testPropertyWithoutObject() {
-        FloatPropertyCompat propertyNoObject = new FloatPropertyCompat("") {
-            private float mValue = 0f;
-            private int mInvocation = 0;
+    public void testFloatValueHolder() {
+        final FloatValueHolder floatValueHolder = new FloatValueHolder(0f);
+        DynamicAnimation.OnAnimationUpdateListener updateListener =
+                new DynamicAnimation.OnAnimationUpdateListener() {
+            private float mLastValue = 0f;
             @Override
-            public float getValue(Object object) {
-                return mValue;
-            }
-
-            @Override
-            public void setValue(Object object, float value) {
-                if (value == 1000f) {
-                    // Last frame
-                    assertTrue(mInvocation > 10);
-                }
+            public void onAnimationUpdate(DynamicAnimation animation, float value, float velocity) {
                 // New value >= value from last frame
-                assertTrue(mValue <= value);
-                mInvocation++;
-                mValue = value;
+                assertTrue(value >= mLastValue);
+                mLastValue = value;
+                assertEquals(value, floatValueHolder.getValue(), 0f);
             }
         };
-        final SpringAnimation anim = new SpringAnimation(propertyNoObject);
+
+        DynamicAnimation.OnAnimationUpdateListener mockListener =
+                mock(DynamicAnimation.OnAnimationUpdateListener.class);
+
+        final SpringAnimation anim = new SpringAnimation(floatValueHolder)
+                .addUpdateListener(updateListener).addUpdateListener(mockListener);
         anim.setSpring(new SpringForce(1000).setDampingRatio(1.2f));
 
         DynamicAnimation.OnAnimationEndListener listener = mock(
@@ -141,6 +142,9 @@ public class SpringTests {
                 anim.setStartValue(0).start();
             }
         });
+
+        verify(mockListener, timeout(1000).atLeast(10)).onAnimationUpdate(eq(anim), lt(1000f),
+                any(float.class));
         verify(listener, timeout(1000)).onAnimationEnd(anim, false, 1000f, 0f);
     }
 
@@ -556,6 +560,47 @@ public class SpringTests {
         verify(mockListener, timeout(1000).times(1)).onAnimationEnd(anim, false,
                 finalPosition + 1000f, 0);
 
+    }
+
+    /**
+     * Check that the min visible change does affect how soon spring animations end.
+     */
+    public void testScaleMinChange() {
+        FloatValueHolder valueHolder = new FloatValueHolder(0.5f);
+        final SpringAnimation anim = new SpringAnimation(valueHolder);
+        DynamicAnimation.OnAnimationUpdateListener mockListener =
+                mock(DynamicAnimation.OnAnimationUpdateListener.class);
+        anim.addUpdateListener(mockListener);
+
+        final DynamicAnimation.OnAnimationEndListener endListener =
+                mock(DynamicAnimation.OnAnimationEndListener.class);
+        anim.addEndListener(endListener);
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
+            @Override
+            public void run() {
+                anim.animateToFinalPosition(1f);
+            }
+        });
+
+        verify(endListener, timeout(500)).onAnimationEnd(anim, false, 0, 0);
+        verify(mockListener, atMost(5)).onAnimationUpdate(eq(anim), anyFloat(), anyFloat());
+
+        assertEquals(DynamicAnimation.MIN_VISIBLE_CHANGE_PIXELS, anim.getMinimumVisibleChange());
+
+        // Set the right threshold and start again.
+        anim.setMinimumVisibleChange(DynamicAnimation.MIN_VISIBLE_CHANGE_SCALE);
+        anim.setStartValue(0.5f);
+
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
+            @Override
+            public void run() {
+                anim.animateToFinalPosition(1f);
+            }
+        });
+
+        verify(endListener, timeout(2000)).onAnimationEnd(anim, false, 0, 0);
+        verify(mockListener, atLeast(10)).onAnimationUpdate(eq(anim), anyFloat(), anyFloat());
     }
 
     /**

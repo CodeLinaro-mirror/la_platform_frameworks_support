@@ -102,11 +102,11 @@ public class TintTypedArray {
      *         not a font resource.
      */
     @Nullable
-    public Typeface getFont(@StyleableRes int index) {
+    public Typeface getFont(@StyleableRes int index, int style) {
         if (mWrapped.hasValue(index)) {
             final int resourceId = mWrapped.getResourceId(index, 0);
             if (resourceId != 0) {
-                return ResourcesCompat.getFont(mContext, resourceId);
+                return ResourcesCompat.getFont(mContext, resourceId, style);
             }
         }
         return null;

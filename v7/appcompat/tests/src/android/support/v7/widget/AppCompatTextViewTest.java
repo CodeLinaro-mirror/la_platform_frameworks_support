@@ -21,10 +21,13 @@ import static android.support.v7.testutils.TestUtilsActions.setEnabled;
 import static android.support.v7.testutils.TestUtilsActions.setTextAppearance;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.support.test.filters.SmallTest;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.res.ResourcesCompat;
@@ -56,21 +59,21 @@ public class AppCompatTextViewTest
         // Note that TextView.getText() returns the original text. We are interested in
         // the transformed text that is set on the Layout object used to draw the final
         // (transformed) content.
-        assertEquals("Text view starts in all caps on", text1.toUpperCase(),
-                textView1.getLayout().getText());
-        assertEquals("Text view starts in all caps off", text2,
-                textView2.getLayout().getText());
+        assertEquals("Text view starts in all caps on",
+                text1.toUpperCase(), textView1.getLayout().getText().toString());
+        assertEquals("Text view starts in all caps off",
+                text2, textView2.getLayout().getText().toString());
 
         // Toggle all-caps mode on the two text views
         onView(withId(R.id.text_view_caps1)).perform(
                 setTextAppearance(R.style.TextStyleAllCapsOff));
-        assertEquals("Text view is now in all caps off", text1,
-                textView1.getLayout().getText());
+        assertEquals("Text view is now in all caps off",
+                text1, textView1.getLayout().getText().toString());
 
         onView(withId(R.id.text_view_caps2)).perform(
                 setTextAppearance(R.style.TextStyleAllCapsOn));
-        assertEquals("Text view is now in all caps on", text2.toUpperCase(),
-                textView2.getLayout().getText());
+        assertEquals("Text view is now in all caps on",
+                text2.toUpperCase(), textView2.getLayout().getText().toString());
     }
 
     @Test
@@ -135,6 +138,23 @@ public class AppCompatTextViewTest
     }
 
     @Test
+    public void testFontResources_setInStringFamilyName() {
+        TextView textView =
+                mContainer.findViewById(R.id.textview_fontresource_fontfamily_string_resource);
+        assertNotNull(textView.getTypeface());
+        // Pre-L, Typeface always resorts to native for a Typeface object, hence giving you a
+        // different one each call.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            assertEquals(Typeface.SANS_SERIF, textView.getTypeface());
+        }
+        textView = mContainer.findViewById(R.id.textview_fontresource_fontfamily_string_direct);
+        assertNotNull(textView.getTypeface());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            assertEquals(Typeface.SANS_SERIF, textView.getTypeface());
+        }
+    }
+
+    @Test
     public void testFontResources_setInXmlFamilyName() {
         TextView textView = mContainer.findViewById(R.id.textview_fontresource_fontfamily);
         Typeface expected = ResourcesCompat.getFont(mActivity, R.font.samplefont);
@@ -148,6 +168,22 @@ public class AppCompatTextViewTest
         Typeface expected = ResourcesCompat.getFont(mActivity, R.font.samplexmlfont);
 
         assertEquals(expected, textView.getTypeface());
+    }
+
+    @Test
+    public void testFontResourcesXml_setInXmlFamilyNameWithTextStyle() {
+        TextView textView =
+                mContainer.findViewById(R.id.textview_fontxmlresource_fontfamily_textstyle);
+
+        assertNotEquals(Typeface.DEFAULT, textView.getTypeface());
+    }
+
+    @Test
+    public void testFontResourcesXml_setInXmlFamilyNameWithTextStyle2() {
+        TextView textView =
+                mContainer.findViewById(R.id.textview_fontxmlresource_fontfamily_textstyle2);
+
+        assertNotEquals(Typeface.DEFAULT, textView.getTypeface());
     }
 
     @Test
@@ -180,5 +216,20 @@ public class AppCompatTextViewTest
         Typeface expected = ResourcesCompat.getFont(mActivity, R.font.samplexmlfont);
 
         assertEquals(expected, textView.getTypeface());
+    }
+
+    @Test
+    public void testTextStyle_setTextStyleInStyle() {
+        // TextView has a TextAppearance by default, but the textStyle can be overriden in style.
+        TextView textView = mContainer.findViewById(R.id.textview_textStyleOverride);
+
+        assertEquals(Typeface.ITALIC, textView.getTypeface().getStyle());
+    }
+
+    @Test
+    public void testTextStyle_setTextStyleDirectly() {
+        TextView textView = mContainer.findViewById(R.id.textview_textStyleDirect);
+
+        assertEquals(Typeface.ITALIC, textView.getTypeface().getStyle());
     }
 }

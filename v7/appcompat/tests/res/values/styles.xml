@@ -54,11 +54,15 @@
     <style name="PopupEmptyStyle" />
 
     <style name="TextView_FontResource">
-        <item name="android:fontFamily">@font/samplefont</item>
+        <item name="fontFamily">@font/samplefont</item>
         <item name="android:textAppearance">@null</item>
     </style>
 
     <style name="TextView_FontXmlResource">
-        <item name="android:fontFamily">@font/samplexmlfont</item>
+        <item name="fontFamily">@font/samplexmlfont</item>
+    </style>
+
+    <style name="TextView_TextStyleOverride">
+        <item name="android:textStyle">italic</item>
     </style>
 </resources>
