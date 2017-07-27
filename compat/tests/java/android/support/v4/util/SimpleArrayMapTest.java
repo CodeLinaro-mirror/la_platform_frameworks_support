@@ -16,7 +16,7 @@ package android.support.v4.util;
 
 import static org.junit.Assert.fail;
 
-import android.support.test.filters.SmallTest;
+import android.support.test.filters.LargeTest;
 import android.support.test.runner.AndroidJUnit4;
 import android.util.Log;
 
@@ -24,12 +24,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.ConcurrentModificationException;
+import java.util.Locale;
 
 /**
  * Unit tests for SimpleArrayMap
  */
 @RunWith(AndroidJUnit4.class)
-@SmallTest
+@LargeTest
 public class SimpleArrayMapTest {
     private static final String TAG = "SimpleArrayMapTest";
     SimpleArrayMap<String, String> map = new SimpleArrayMap<>();
@@ -49,7 +50,7 @@ public class SimpleArrayMapTest {
                 int i = 0;
                 while (!mDone) {
                     try {
-                        map.put(String.format("key %d", i++), "B_DONT_DO_THAT");
+                        map.put(String.format(Locale.US, "key %d", i++), "B_DONT_DO_THAT");
                     } catch (ArrayIndexOutOfBoundsException e) {
                         // SimpleArrayMap is not thread safe, so lots of concurrent modifications
                         // can still cause data corruption
@@ -87,7 +88,7 @@ public class SimpleArrayMapTest {
     public void testNonConcurrentAccesses() throws Exception {
         for (int i = 0; i < 100000; i++) {
             try {
-                map.put(String.format("key %d", i++), "B_DONT_DO_THAT");
+                map.put(String.format(Locale.US, "key %d", i++), "B_DONT_DO_THAT");
                 if (i % 500 == 0) {
                     map.clear();
                 }

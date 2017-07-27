@@ -41,9 +41,13 @@ import java.util.Map;
  */
 public class MockFontProvider extends ContentProvider {
     static final String[] FONT_FILES = {
-            "samplefont1.ttf",
+            "samplefont.ttf", "large_a.ttf", "large_b.ttf", "large_c.ttf", "large_d.ttf"
     };
     private static final int SAMPLE_FONT_FILE_0_ID = 0;
+    private static final int LARGE_A_FILE_ID = 1;
+    private static final int LARGE_B_FILE_ID = 2;
+    private static final int LARGE_C_FILE_ID = 3;
+    private static final int LARGE_D_FILE_ID = 4;
 
     static final String SINGLE_FONT_FAMILY_QUERY = "singleFontFamily";
     static final String SINGLE_FONT_FAMILY2_QUERY = "singleFontFamily2";
@@ -54,6 +58,7 @@ public class MockFontProvider extends ContentProvider {
     static final String NOT_FOUND_THIRD_QUERY = "notFoundThird";
     static final String NEGATIVE_ERROR_CODE_QUERY = "negativeCode";
     static final String MANDATORY_FIELDS_ONLY_QUERY = "mandatoryFields";
+    static final String STYLE_TEST_QUERY = "styleTest";
 
     static class Font {
         Font(int id, int fileId, int ttcIndex, String varSettings, int weight, int italic,
@@ -160,6 +165,17 @@ public class MockFontProvider extends ContentProvider {
                         Columns.RESULT_CODE_OK, false),
         });
 
+        map.put(STYLE_TEST_QUERY, new Font[] {
+                new Font(id++, LARGE_A_FILE_ID, 0, null, 400, 0 /* normal */,
+                        Columns.RESULT_CODE_OK, true),
+                new Font(id++, LARGE_B_FILE_ID, 0, null, 400, 1 /* italic */,
+                        Columns.RESULT_CODE_OK, true),
+                new Font(id++, LARGE_C_FILE_ID, 0, null, 700, 0 /* normal */,
+                        Columns.RESULT_CODE_OK, true),
+                new Font(id++, LARGE_D_FILE_ID, 0, null, 700, 1 /* italic */,
+                        Columns.RESULT_CODE_OK, true),
+        });
+
         QUERY_MAP = Collections.unmodifiableMap(map);
     }
 
@@ -188,7 +204,15 @@ public class MockFontProvider extends ContentProvider {
             InputStream is = null;
             try {
                 is = mgr.open("fonts/" + file);
-                copy(is, getCopiedFile(context, file));
+                File copied = getCopiedFile(context, file);
+                File parent = copied.getParentFile();
+                if (!parent.isDirectory()) {
+                    parent.mkdirs();
+                    parent.setReadable(true, false);
+                    parent.setExecutable(true, false);
+                }
+                copy(is, copied);
+                copied.setReadable(true, false);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             } finally {
@@ -229,7 +253,8 @@ public class MockFontProvider extends ContentProvider {
     }
 
     public static File getCopiedFile(Context context, String path) {
-        return new File(context.getFilesDir(), path);
+        final File cacheDir = new File(context.getFilesDir(), "fontCache");
+        return new File(cacheDir, path);
     }
 
     @Override

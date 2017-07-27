@@ -17,7 +17,9 @@
 package android.support.v4.provider;
 
 import static android.support.annotation.RestrictTo.Scope.LIBRARY_GROUP;
+import static android.support.v4.content.res.FontResourcesParserCompat.FetchStrategy;
 
+import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
@@ -35,23 +37,27 @@ import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
 import android.provider.BaseColumns;
+import android.support.annotation.GuardedBy;
 import android.support.annotation.IntDef;
 import android.support.annotation.IntRange;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.annotation.RestrictTo;
 import android.support.annotation.VisibleForTesting;
 import android.support.v4.content.res.FontResourcesParserCompat;
 import android.support.v4.graphics.TypefaceCompat;
+import android.support.v4.graphics.TypefaceCompatUtil;
+import android.support.v4.provider.SelfDestructiveThread.ReplyCallback;
 import android.support.v4.util.LruCache;
 import android.support.v4.util.Preconditions;
+import android.support.v4.util.SimpleArrayMap;
+import android.widget.TextView;
 
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -173,31 +179,98 @@ public class FontsContractCompat {
             new SelfDestructiveThread("fonts", Process.THREAD_PRIORITY_BACKGROUND,
                     BACKGROUND_THREAD_KEEP_ALIVE_DURATION_MS);
 
+    private static Typeface getFontInternal(final Context context, final FontRequest request,
+            int style) {
+        FontFamilyResult result;
+        try {
+            result = fetchFonts(context, null /* CancellationSignal */, request);
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
+        if (result.getStatusCode() == FontFamilyResult.STATUS_OK) {
+            return TypefaceCompat.createFromFontInfo(context, null /* CancellationSignal */,
+                    result.getFonts(), style);
+        }
+        return null;
+    }
+
+    private static final Object sLock = new Object();
+    @GuardedBy("sLock")
+    private static final SimpleArrayMap<String, ArrayList<ReplyCallback<Typeface>>>
+            sPendingReplies = new SimpleArrayMap<>();
+
     /** @hide */
     @RestrictTo(LIBRARY_GROUP)
-    public static Typeface getFontSync(final Context context, final FontRequest request) {
-        final String id = request.getIdentifier();
+    public static Typeface getFontSync(final Context context, final FontRequest request,
+            final @Nullable TextView targetView, @FetchStrategy int strategy, int timeout,
+            final int style) {
+        final String id = request.getIdentifier() + "-" + style;
         Typeface cached = sTypefaceCache.get(id);
         if (cached != null) {
             return cached;
         }
 
-        try {
-            return sBackgroundThread.postAndWait(new Callable<Typeface>() {
+        final boolean isBlockingFetch =
+                strategy == FontResourcesParserCompat.FETCH_STRATEGY_BLOCKING;
+
+        if (isBlockingFetch && timeout == FontResourcesParserCompat.INFINITE_TIMEOUT_VALUE) {
+            // Wait forever. No need to post to the thread.
+            return getFontInternal(context, request, style);
+        }
+
+        final Callable<Typeface> fetcher = new Callable<Typeface>() {
+            @Override
+            public Typeface call() throws Exception {
+                Typeface typeface = getFontInternal(context, request, style);
+                if (typeface != null) {
+                    sTypefaceCache.put(id, typeface);
+                }
+                return typeface;
+            }
+        };
+
+        if (isBlockingFetch) {
+            try {
+                return sBackgroundThread.postAndWait(fetcher, timeout);
+            } catch (InterruptedException e) {
+                return null;
+            }
+        } else {
+            final WeakReference<TextView> textViewWeak = new WeakReference<TextView>(targetView);
+            final ReplyCallback<Typeface> reply = new ReplyCallback<Typeface>() {
                 @Override
-                public Typeface call() throws Exception {
-                    FontFamilyResult result = fetchFonts(context, null, request);
-                    if (result.getStatusCode() == FontFamilyResult.STATUS_OK) {
-                        Typeface typeface = buildTypeface(context, null, result.getFonts());
-                        if (typeface != null) {
-                            sTypefaceCache.put(id, typeface);
-                        }
-                        return typeface;
+                public void onReply(final Typeface typeface) {
+                    final TextView textView = textViewWeak.get();
+                    if (textView != null) {
+                        targetView.setTypeface(typeface, style);
                     }
+                }
+            };
+
+            synchronized (sLock) {
+                if (sPendingReplies.containsKey(id)) {
+                    // Already requested. Do not request the same provider again and insert the
+                    // reply to the queue instead.
+                    sPendingReplies.get(id).add(reply);
                     return null;
                 }
-            }, 500);
-        } catch (InterruptedException e) {
+                ArrayList<ReplyCallback<Typeface>> pendingReplies = new ArrayList<>();
+                pendingReplies.add(reply);
+                sPendingReplies.put(id, pendingReplies);
+            }
+            sBackgroundThread.postAndReply(fetcher, new ReplyCallback<Typeface>() {
+                @Override
+                public void onReply(final Typeface typeface) {
+                    final ArrayList<ReplyCallback<Typeface>> replies;
+                    synchronized (sLock) {
+                        replies = sPendingReplies.get(id);
+                        sPendingReplies.remove(id);
+                    }
+                    for (int i = 0; i < replies.size(); ++i) {
+                        replies.get(i).onReply(typeface);
+                    }
+                };
+            });
             return null;
         }
     }
@@ -516,55 +589,6 @@ public class FontsContractCompat {
     }
 
     /**
-     * A helper function to create a mapping from {@link Uri} to {@link ByteBuffer}.
-     *
-     * Skip if the file contents is not ready to be read.
-     *
-     * @param context A {@link Context} to be used for resolving content URI in
-     *                {@link FontInfo}.
-     * @param fonts An array of {@link FontInfo}.
-     * @return A map from {@link Uri} to {@link ByteBuffer}.
-     */
-    private static Map<Uri, ByteBuffer> prepareFontData(Context context, FontInfo[] fonts,
-            CancellationSignal cancellationSignal) {
-        final HashMap<Uri, ByteBuffer> out = new HashMap<>();
-        final ContentResolver resolver = context.getContentResolver();
-
-        for (FontInfo font : fonts) {
-            if (font.getResultCode() != Columns.RESULT_CODE_OK) {
-                continue;
-            }
-
-            final Uri uri = font.getUri();
-            if (out.containsKey(uri)) {
-                continue;
-            }
-
-            ByteBuffer buffer = null;
-            ParcelFileDescriptor pfd = null;
-            FileInputStream fis = null;
-            try {
-                if (Build.VERSION.SDK_INT > 19) {
-                    pfd = resolver.openFileDescriptor(uri, "r", cancellationSignal);
-                } else {
-                    pfd = resolver.openFileDescriptor(uri, "r");
-                }
-                fis = new FileInputStream(pfd.getFileDescriptor());
-                final FileChannel fileChannel = fis.getChannel();
-                final long size = fileChannel.size();
-                buffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, size);
-            } catch (IOException e) {
-                // ignore
-            }
-
-            // TODO: try other approach?, e.g. read all contents instead of mmap.
-
-            out.put(uri, buffer);
-        }
-        return Collections.unmodifiableMap(out);
-    }
-
-    /**
      * Build a Typeface from an array of {@link FontInfo}
      *
      * Results that are marked as not ready will be skipped.
@@ -578,9 +602,41 @@ public class FontsContractCompat {
      */
     public static Typeface buildTypeface(@NonNull Context context,
             @Nullable CancellationSignal cancellationSignal, @NonNull FontInfo[] fonts) {
-        final Map<Uri, ByteBuffer> uriBuffer =
-                prepareFontData(context, fonts, cancellationSignal);
-        return TypefaceCompat.createTypeface(context, fonts, uriBuffer);
+        return TypefaceCompat.createFromFontInfo(context, cancellationSignal, fonts,
+                Typeface.NORMAL);
+    }
+
+    /**
+     * A helper function to create a mapping from {@link Uri} to {@link ByteBuffer}.
+     *
+     * Skip if the file contents is not ready to be read.
+     *
+     * @param context A {@link Context} to be used for resolving content URI in
+     *                {@link FontInfo}.
+     * @param fonts An array of {@link FontInfo}.
+     * @return A map from {@link Uri} to {@link ByteBuffer}.
+     * @hide
+     */
+    @RestrictTo(LIBRARY_GROUP)
+    @RequiresApi(19)
+    public static Map<Uri, ByteBuffer> prepareFontData(Context context, FontInfo[] fonts,
+            CancellationSignal cancellationSignal) {
+        final HashMap<Uri, ByteBuffer> out = new HashMap<>();
+
+        for (FontInfo font : fonts) {
+            if (font.getResultCode() != Columns.RESULT_CODE_OK) {
+                continue;
+            }
+
+            final Uri uri = font.getUri();
+            if (out.containsKey(uri)) {
+                continue;
+            }
+
+            ByteBuffer buffer = TypefaceCompatUtil.mmap(context, cancellationSignal, uri);
+            out.put(uri, buffer);
+        }
+        return Collections.unmodifiableMap(out);
     }
 
     /**
@@ -634,6 +690,8 @@ public class FontsContractCompat {
         }
 
         List<byte[]> signatures;
+        // We correctly check all signatures returned, as advised in the lint error.
+        @SuppressLint("PackageManagerGetSignatures")
         PackageInfo packageInfo = packageManager.getPackageInfo(info.packageName,
                 PackageManager.GET_SIGNATURES);
         signatures = convertToByteArrayList(packageInfo.signatures);

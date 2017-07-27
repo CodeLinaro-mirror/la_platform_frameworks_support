@@ -49,9 +49,12 @@ import android.widget.ImageView;
 
 import org.hamcrest.Description;
 import org.hamcrest.TypeSafeMatcher;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 /**
  * Espresso tests for {@link WearableDrawerLayout}.
@@ -69,34 +72,11 @@ public class WearableDrawerLayoutEspressoTest {
     private final Intent mSinglePageIntent =
             new DrawerTestActivity.Builder().setStyle(DrawerStyle.BOTH_DRAWER_NAV_SINGLE_PAGE)
                     .build();
+    @Mock WearableNavigationDrawerView.OnItemSelectedListener mNavDrawerItemSelectedListener;
 
-    private static TypeSafeMatcher<View> isOpened(final boolean isOpened) {
-        return new TypeSafeMatcher<View>() {
-            @Override
-            public void describeTo(Description description) {
-                description.appendText("is opened == " + isOpened);
-            }
-
-            @Override
-            public boolean matchesSafely(View view) {
-                return ((WearableDrawerView) view).isOpened() == isOpened;
-            }
-        };
-    }
-
-    private static TypeSafeMatcher<View> isClosed(final boolean isClosed) {
-        return new TypeSafeMatcher<View>() {
-            @Override
-            protected boolean matchesSafely(View view) {
-                WearableDrawerView drawer = (WearableDrawerView) view;
-                return drawer.isClosed() == isClosed;
-            }
-
-            @Override
-            public void describeTo(Description description) {
-                description.appendText("is closed");
-            }
-        };
+    @Before
+    public void setUp() {
+        MockitoAnnotations.initMocks(this);
     }
 
     @Test
@@ -156,7 +136,7 @@ public class WearableDrawerLayoutEspressoTest {
                                 MAX_WAIT_MS));
 
         // THEN the text should display "0".
-        onView(withId(R.id.wearable_support_nav_drawer_text)).check(matches(withText("0")));
+        onView(withId(R.id.ws_nav_drawer_text)).check(matches(withText("0")));
     }
 
     @Test
@@ -171,19 +151,59 @@ public class WearableDrawerLayoutEspressoTest {
                                 MAX_WAIT_MS));
 
         // WHEN the second item is selected
-        onView(withId(R.id.wearable_support_nav_drawer_icon_1)).perform(click());
+        onView(withId(R.id.ws_nav_drawer_icon_1)).perform(click());
 
         // THEN the text should display "1" and it should close.
-        onView(withId(R.id.wearable_support_nav_drawer_text))
+        onView(withId(R.id.ws_nav_drawer_text))
                 .perform(
                         waitForMatchingView(
-                                allOf(withId(R.id.wearable_support_nav_drawer_text), withText("1")),
+                                allOf(withId(R.id.ws_nav_drawer_text), withText("1")),
                                 MAX_WAIT_MS));
         onView(withId(R.id.navigation_drawer))
                 .perform(
                         waitForMatchingView(
                                 allOf(withId(R.id.navigation_drawer), isClosed(true)),
                                 MAX_WAIT_MS));
+    }
+
+    @Test
+    public void programmaticallySelectingNavItemChangesTextInSinglePage() {
+        // GIVEN an open top drawer
+        activityRule.launchActivity(new DrawerTestActivity.Builder()
+                .setStyle(DrawerStyle.BOTH_DRAWER_NAV_SINGLE_PAGE)
+                .openTopDrawerInOnCreate()
+                .build());
+        final WearableNavigationDrawerView navDrawer =
+                activityRule.getActivity().findViewById(R.id.navigation_drawer);
+        navDrawer.addOnItemSelectedListener(mNavDrawerItemSelectedListener);
+
+        // WHEN the second item is selected programmatically
+        selectNavItem(navDrawer, 1);
+
+        // THEN the text should display "1" and the listener should be notified.
+        onView(withId(R.id.ws_nav_drawer_text))
+                .check(matches(withText("1")));
+        verify(mNavDrawerItemSelectedListener).onItemSelected(1);
+    }
+
+    @Test
+    public void programmaticallySelectingNavItemChangesTextInMultiPage() {
+        // GIVEN an open top drawer
+        activityRule.launchActivity(new DrawerTestActivity.Builder()
+                .setStyle(DrawerStyle.BOTH_DRAWER_NAV_MULTI_PAGE)
+                .openTopDrawerInOnCreate()
+                .build());
+        final WearableNavigationDrawerView navDrawer =
+                activityRule.getActivity().findViewById(R.id.navigation_drawer);
+        navDrawer.addOnItemSelectedListener(mNavDrawerItemSelectedListener);
+
+        // WHEN the second item is selected programmatically
+        selectNavItem(navDrawer, 1);
+
+        // THEN the text should display "1" and the listener should be notified.
+        onView(allOf(withId(R.id.ws_navigation_drawer_item_text), isDisplayed()))
+                .check(matches(withText("1")));
+        verify(mNavDrawerItemSelectedListener).onItemSelected(1);
     }
 
     @Test
@@ -299,7 +319,7 @@ public class WearableDrawerLayoutEspressoTest {
         DrawerTestActivity activity = activityRule.getActivity();
         ImageView peekIconView =
                 (ImageView) activity
-                        .findViewById(R.id.wearable_support_action_drawer_peek_action_icon);
+                        .findViewById(R.id.ws_action_drawer_peek_action_icon);
         // THEN its peek icon should not be null
         assertNotNull(peekIconView.getDrawable());
     }
@@ -320,7 +340,7 @@ public class WearableDrawerLayoutEspressoTest {
         onView(
                 allOf(
                         withParent(withId(R.id.action_drawer)),
-                        withId(R.id.wearable_support_drawer_view_peek_container)))
+                        withId(R.id.ws_drawer_view_peek_container)))
                 .perform(click());
         // THEN its click listener should be notified
         verify(mockClickListener).onMenuItemClick(any(MenuItem.class));
@@ -360,6 +380,15 @@ public class WearableDrawerLayoutEspressoTest {
         });
     }
 
+    private void selectNavItem(final WearableNavigationDrawerView navDrawer, final int index) {
+        navDrawer.post(new Runnable() {
+            @Override
+            public void run() {
+                navDrawer.setCurrentItem(index, false);
+            }
+        });
+    }
+
     private void peekDrawer(final WearableDrawerView drawer) {
         drawer.post(new Runnable() {
             @Override
@@ -376,6 +405,35 @@ public class WearableDrawerLayoutEspressoTest {
                 drawer.getController().openDrawer();
             }
         });
+    }
+
+    private static TypeSafeMatcher<View> isOpened(final boolean isOpened) {
+        return new TypeSafeMatcher<View>() {
+            @Override
+            public void describeTo(Description description) {
+                description.appendText("is opened == " + isOpened);
+            }
+
+            @Override
+            public boolean matchesSafely(View view) {
+                return ((WearableDrawerView) view).isOpened() == isOpened;
+            }
+        };
+    }
+
+    private static TypeSafeMatcher<View> isClosed(final boolean isClosed) {
+        return new TypeSafeMatcher<View>() {
+            @Override
+            protected boolean matchesSafely(View view) {
+                WearableDrawerView drawer = (WearableDrawerView) view;
+                return drawer.isClosed() == isClosed;
+            }
+
+            @Override
+            public void describeTo(Description description) {
+                description.appendText("is closed");
+            }
+        };
     }
 
     private TypeSafeMatcher<View> isPeeking() {

@@ -25,7 +25,8 @@ import static android.support.v4.media.MediaBrowserProtocol.CLIENT_MSG_REGISTER_
 import static android.support.v4.media.MediaBrowserProtocol.CLIENT_MSG_REMOVE_SUBSCRIPTION;
 import static android.support.v4.media.MediaBrowserProtocol.CLIENT_MSG_SEARCH;
 import static android.support.v4.media.MediaBrowserProtocol.CLIENT_MSG_SEND_CUSTOM_ACTION;
-import static android.support.v4.media.MediaBrowserProtocol.CLIENT_MSG_UNREGISTER_CALLBACK_MESSENGER;
+import static android.support.v4.media.MediaBrowserProtocol
+        .CLIENT_MSG_UNREGISTER_CALLBACK_MESSENGER;
 import static android.support.v4.media.MediaBrowserProtocol.DATA_CALLBACK_TOKEN;
 import static android.support.v4.media.MediaBrowserProtocol.DATA_CALLING_UID;
 import static android.support.v4.media.MediaBrowserProtocol.DATA_CUSTOM_ACTION;
@@ -68,7 +69,6 @@ import android.support.annotation.RestrictTo;
 import android.support.v4.app.BundleCompat;
 import android.support.v4.media.session.IMediaSession;
 import android.support.v4.media.session.MediaSessionCompat;
-import android.support.v4.os.BuildCompat;
 import android.support.v4.os.ResultReceiver;
 import android.support.v4.util.ArrayMap;
 import android.support.v4.util.Pair;
@@ -240,6 +240,7 @@ public abstract class MediaBrowserServiceCompat extends Service {
     @RequiresApi(21)
     class MediaBrowserServiceImplApi21 implements MediaBrowserServiceImpl,
             MediaBrowserServiceCompatApi21.ServiceCompatProxy {
+        final List<Bundle> mRootExtrasList = new ArrayList<>();
         Object mServiceObj;
         Messenger mMessenger;
 
@@ -256,8 +257,23 @@ public abstract class MediaBrowserServiceCompat extends Service {
         }
 
         @Override
-        public void setSessionToken(MediaSessionCompat.Token token) {
-            MediaBrowserServiceCompatApi21.setSessionToken(mServiceObj, token.getToken());
+        public void setSessionToken(final MediaSessionCompat.Token token) {
+            mHandler.postOrRun(new Runnable() {
+                @Override
+                public void run() {
+                    if (!mRootExtrasList.isEmpty()) {
+                        IMediaSession extraBinder = token.getExtraBinder();
+                        if (extraBinder != null) {
+                            for (Bundle rootExtras : mRootExtrasList) {
+                                BundleCompat.putBinder(rootExtras, EXTRA_SESSION_BINDER,
+                                        extraBinder.asBinder());
+                            }
+                        }
+                        mRootExtrasList.clear();
+                    }
+                    MediaBrowserServiceCompatApi21.setSessionToken(mServiceObj, token.getToken());
+                }
+            });
         }
 
         @Override
@@ -313,6 +329,8 @@ public abstract class MediaBrowserServiceCompat extends Service {
                     IMediaSession extraBinder = mSession.getExtraBinder();
                     BundleCompat.putBinder(rootExtras, EXTRA_SESSION_BINDER,
                             extraBinder == null ? null : extraBinder.asBinder());
+                } else {
+                    mRootExtrasList.add(rootExtras);
                 }
             }
             BrowserRoot root = MediaBrowserServiceCompat.this.onGetRoot(
@@ -959,7 +977,7 @@ public abstract class MediaBrowserServiceCompat extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        if (BuildCompat.isAtLeastO()) {
+        if (Build.VERSION.SDK_INT >= 26) {
             mImpl = new MediaBrowserServiceImplApi24();
         } else if (Build.VERSION.SDK_INT >= 23) {
             mImpl = new MediaBrowserServiceImplApi23();

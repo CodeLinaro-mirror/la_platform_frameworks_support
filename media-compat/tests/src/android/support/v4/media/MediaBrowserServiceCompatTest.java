@@ -381,6 +381,8 @@ public class MediaBrowserServiceCompatTest {
     @Test
     @SmallTest
     public void testDelayedSetSessionToken() throws Exception {
+        // This test has no meaning in API 21. The framework MediaBrowserService just connects to
+        // the media browser without waiting setMediaSession() to be called.
         if (Build.VERSION.SDK_INT == 21) {
             return;
         }
@@ -404,6 +406,11 @@ public class MediaBrowserServiceCompatTest {
             StubMediaBrowserServiceCompatWithDelayedMediaSession.sInstance.callSetSessionToken();
             mWaitLock.wait(TIME_OUT_MS);
             assertEquals(1, callback.mConnectedCount);
+
+            if (Build.VERSION.SDK_INT >= 21) {
+                assertNotNull(
+                        mMediaBrowserForDelayedMediaSession.getSessionToken().getExtraBinder());
+            }
         }
     }
 
@@ -575,6 +582,5 @@ public class MediaBrowserServiceCompatTest {
                 mWaitLock.notify();
             }
         }
-    };
-
+    }
 }

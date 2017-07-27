@@ -20,29 +20,37 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.os.Build;
 import android.os.SystemClock;
+import android.support.test.InstrumentationRegistry;
 import android.support.test.filters.SmallTest;
-import android.support.v4.os.BuildCompat;
+import android.support.test.rule.ActivityTestRule;
+import android.support.test.runner.AndroidJUnit4;
 import android.support.v7.testutils.BaseTestActivity;
 import android.support.v7.widget.Toolbar;
-import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.Window;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
-public class KeyboardShortcutsTestCaseWithToolbar
-        extends BaseKeyboardShortcutsTestCase<ToolbarAppCompatActivity> {
-    public KeyboardShortcutsTestCaseWithToolbar() {
-        super(ToolbarAppCompatActivity.class);
-    }
+@RunWith(AndroidJUnit4.class)
+public class KeyboardShortcutsTestCaseWithToolbar {
+    @Rule
+    public final ActivityTestRule<ToolbarAppCompatActivity> mActivityTestRule =
+            new ActivityTestRule<>(ToolbarAppCompatActivity.class);
 
     @Test
     @SmallTest
     public void testAccessActionBar() throws Throwable {
-        final BaseTestActivity activity = getActivity();
+        // Since O, we rely on keyboard navigation clusters for jumping to actionbar
+        if (Build.VERSION.SDK_INT <= 25) {
+            return;
+        }
+        final BaseTestActivity activity = mActivityTestRule.getActivity();
 
         final View editText = activity.findViewById(android.support.v7.appcompat.test.R.id.editText);
         mActivityTestRule.runOnUiThread(new Runnable() {
@@ -52,16 +60,10 @@ public class KeyboardShortcutsTestCaseWithToolbar
             }
         });
 
-        getInstrumentation().waitForIdleSync();
-        if (BuildCompat.isAtLeastO()) {
-            // Since O, we rely on keyboard navigation clusters for jumping to actionbar
-            sendMetaKey(KeyEvent.KEYCODE_TAB);
-        } else {
-            sendControlChar('<');
-        }
-        getInstrumentation().waitForIdleSync();
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        sendMetaKey(KeyEvent.KEYCODE_TAB);
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
 
-        // Should jump to the action bar after control-<
         mActivityTestRule.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -70,14 +72,11 @@ public class KeyboardShortcutsTestCaseWithToolbar
                 assertTrue(toolbar.hasFocus());
             }
         });
-        if (BuildCompat.isAtLeastO()) {
-            // Since O, we rely on keyboard navigation clusters for jumping out of actionbar since
-            // normal navigation no-longer leaves it.
-            sendMetaKey(KeyEvent.KEYCODE_TAB);
-        } else {
-            getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-        }
-        getInstrumentation().waitForIdleSync();
+        // We rely on keyboard navigation clusters for jumping out of actionbar since normal
+        // navigation won't leaves it.
+        sendMetaKey(KeyEvent.KEYCODE_TAB);
+
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
 
         // Should jump to the first view again.
         mActivityTestRule.runOnUiThread(new Runnable() {
@@ -91,10 +90,10 @@ public class KeyboardShortcutsTestCaseWithToolbar
     @Test
     @SmallTest
     public void testKeyShortcuts() throws Throwable {
-        final ToolbarAppCompatActivity activity = getActivity();
+        final ToolbarAppCompatActivity activity = mActivityTestRule.getActivity();
 
         final Toolbar toolbar =
-                (Toolbar) activity.findViewById(android.support.v7.appcompat.test.R.id.toolbar);
+                activity.findViewById(android.support.v7.appcompat.test.R.id.toolbar);
 
         mActivityTestRule.runOnUiThread(new Runnable() {
             @Override
@@ -141,33 +140,20 @@ public class KeyboardShortcutsTestCaseWithToolbar
         activity.resetCounters();
 
         // Make sure that unhandled shortcuts don't prepare menus (since toolbar is handling that).
-        getInstrumentation().sendKeySync(unhandledShortcutKey);
+        InstrumentationRegistry.getInstrumentation().sendKeySync(unhandledShortcutKey);
         assertEquals(1, activity.mKeyShortcutCount);
         assertEquals(0, activity.mPrepareMenuCount);
         assertEquals(0, activity.mCreateMenuCount);
-    }
-
-    private void sendControlChar(char key) throws Throwable {
-        KeyEvent tempEvent = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_A);
-        KeyCharacterMap map = tempEvent.getKeyCharacterMap();
-        KeyEvent[] events = map.getEvents(new char[] {key});
-        for (int i = 0; i < events.length; i++) {
-            long time = SystemClock.uptimeMillis();
-            KeyEvent event = events[i];
-            KeyEvent controlKey = new KeyEvent(time, time, event.getAction(), event.getKeyCode(),
-                    event.getRepeatCount(), event.getMetaState() | KeyEvent.META_CTRL_ON);
-            getInstrumentation().sendKeySync(controlKey);
-        }
     }
 
     private void sendMetaKey(int keyCode) throws Throwable {
         long time = SystemClock.uptimeMillis();
         KeyEvent keyDown = new KeyEvent(time, time, KeyEvent.ACTION_DOWN, keyCode,
                 0, KeyEvent.META_META_ON);
-        getInstrumentation().sendKeySync(keyDown);
+        InstrumentationRegistry.getInstrumentation().sendKeySync(keyDown);
         time = SystemClock.uptimeMillis();
         KeyEvent keyUp = new KeyEvent(time, time, KeyEvent.ACTION_UP, keyCode,
                 0, KeyEvent.META_META_ON);
-        getInstrumentation().sendKeySync(keyUp);
+        InstrumentationRegistry.getInstrumentation().sendKeySync(keyUp);
     }
 }

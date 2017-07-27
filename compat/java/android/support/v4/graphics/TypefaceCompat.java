@@ -18,12 +18,11 @@ package android.support.v4.graphics;
 
 import static android.support.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Typeface;
-import android.net.Uri;
-import android.support.annotation.GuardedBy;
+import android.os.Build;
+import android.os.CancellationSignal;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RestrictTo;
@@ -32,48 +31,48 @@ import android.support.v4.content.res.FontResourcesParserCompat.FontFamilyFilesR
 import android.support.v4.content.res.FontResourcesParserCompat.ProviderResourceEntry;
 import android.support.v4.provider.FontsContractCompat;
 import android.support.v4.provider.FontsContractCompat.FontInfo;
-
-import java.nio.ByteBuffer;
-import java.util.Map;
+import android.support.v4.util.LruCache;
+import android.widget.TextView;
 
 /**
- * Helper for accessing features in {@link Typeface} in a backwards compatible fashion.
+ * Helper for accessing features in {@link Typeface}.
  * @hide
  */
 @RestrictTo(LIBRARY_GROUP)
 public class TypefaceCompat {
-    @GuardedBy("sLock")
-    private static TypefaceCompatImpl sTypefaceCompatImpl;
-    private static final Object sLock = new Object();
+    private static final String TAG = "TypefaceCompat";
 
-    interface TypefaceCompatImpl {
-        // Create Typeface from font file in res/font directory.
-        Typeface createFromResourcesFontFile(Resources resources, int id, int style);
-
-        // Create Typeface from XML which root node is "font-family"
-        Typeface createFromFontFamilyFilesResourceEntry(
-                FontFamilyFilesResourceEntry entry, Resources resources, int id, int style);
-
-        // For finiding cache before parsing xml data.
-        Typeface findFromCache(Resources resources, int id, int style);
-
-        Typeface createTypeface(@NonNull FontInfo[] fonts, Map<Uri, ByteBuffer> uriBuffer);
+    private static final TypefaceCompatImpl sTypefaceCompatImpl;
+    static {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            sTypefaceCompatImpl = new TypefaceCompatApi26Impl();
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+                && TypefaceCompatApi24Impl.isUsable()) {
+            sTypefaceCompatImpl = new TypefaceCompatApi24Impl();
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            sTypefaceCompatImpl = new TypefaceCompatApi21Impl();
+        } else {
+            sTypefaceCompatImpl = new TypefaceCompatBaseImpl();
+        }
     }
 
     /**
-     * If the current implementation is not set, set it according to the current build version. This
-     * is safe to call several times, even if the implementation has already been set.
+     * Cache for Typeface objects dynamically loaded from assets.
      */
-    @TargetApi(26)
-    private static void maybeInitImpl(Context context) {
-        if (sTypefaceCompatImpl == null) {
-            synchronized (sLock) {
-                if (sTypefaceCompatImpl == null) {
-                    // TODO: Maybe we can do better thing on Android N or later.
-                    sTypefaceCompatImpl = new TypefaceCompatBaseImpl(context);
-                }
-            }
-        }
+    private static final LruCache<String, Typeface> sTypefaceCache = new LruCache<>(16);
+
+    interface TypefaceCompatImpl {
+        // Create Typeface from XML which root node is "font-family"
+        Typeface createFromFontFamilyFilesResourceEntry(
+                Context context, FontFamilyFilesResourceEntry entry, Resources resources,
+                int style);
+
+        Typeface createFromFontInfo(Context context,
+                @Nullable CancellationSignal cancellationSignal, @NonNull FontInfo[] fonts,
+                int style);
+
+        Typeface createFromResourcesFontFile(
+                Context context, Resources resources, int id, String path, int style);
     }
 
     private TypefaceCompat() {}
@@ -84,13 +83,19 @@ public class TypefaceCompat {
      * @return null if not found.
      */
     public static Typeface findFromCache(Resources resources, int id, int style) {
-        synchronized (sLock) {
-            // There is no cache if there is no impl.
-            if (sTypefaceCompatImpl == null) {
-                return null;
-            }
-        }
-        return sTypefaceCompatImpl.findFromCache(resources, id, style);
+        return sTypefaceCache.get(createResourceUid(resources, id, style));
+    }
+
+    /**
+     * Create a unique id for a given Resource and id.
+     *
+     * @param resources Resources instance
+     * @param id a resource id
+     * @param style style to be used for this resource, -1 if not available.
+     * @return Unique id for a given resource and id.
+     */
+    private static String createResourceUid(final Resources resources, int id, int style) {
+        return resources.getResourcePackageName(id) + "-" + id + "-" + style;
     }
 
     /**
@@ -99,15 +104,22 @@ public class TypefaceCompat {
      * @return null if failed to create.
      */
     public static Typeface createFromResourcesFamilyXml(
-            Context context, FamilyResourceEntry entry, Resources resources, int id, int style) {
-        maybeInitImpl(context);
+            Context context, FamilyResourceEntry entry, Resources resources, int id, int style,
+            @Nullable TextView targetView) {
+        Typeface typeface;
         if (entry instanceof ProviderResourceEntry) {
-            return FontsContractCompat.getFontSync(context,
-                    ((ProviderResourceEntry) entry).getRequest());
+            ProviderResourceEntry providerEntry = (ProviderResourceEntry) entry;
+            typeface = FontsContractCompat.getFontSync(context,
+                    providerEntry.getRequest(), targetView, providerEntry.getFetchStrategy(),
+                    providerEntry.getTimeout(), style);
         } else {
-            return sTypefaceCompatImpl.createFromFontFamilyFilesResourceEntry(
-                    (FontFamilyFilesResourceEntry) entry, resources, id, style);
+            typeface = sTypefaceCompatImpl.createFromFontFamilyFilesResourceEntry(
+                    context, (FontFamilyFilesResourceEntry) entry, resources, style);
         }
+        if (typeface != null) {
+            sTypefaceCache.put(createResourceUid(resources, id, style), typeface);
+        }
+        return typeface;
     }
 
     /**
@@ -115,17 +127,20 @@ public class TypefaceCompat {
      */
     @Nullable
     public static Typeface createFromResourcesFontFile(
-            Context context, Resources resources, int id, int style) {
-        maybeInitImpl(context);
-        return sTypefaceCompatImpl.createFromResourcesFontFile(resources, id, style);
+            Context context, Resources resources, int id, String path, int style) {
+        Typeface typeface = sTypefaceCompatImpl.createFromResourcesFontFile(
+                context, resources, id, path, style);
+        if (typeface != null) {
+            sTypefaceCache.put(createResourceUid(resources, id, style), typeface);
+        }
+        return typeface;
     }
 
     /**
      * Create a Typeface from a given FontInfo list and a map that matches them to ByteBuffers.
      */
-    public static Typeface createTypeface(Context context, @NonNull FontInfo[] fonts,
-            Map<Uri, ByteBuffer> uriBuffer) {
-        maybeInitImpl(context);
-        return sTypefaceCompatImpl.createTypeface(fonts, uriBuffer);
+    public static Typeface createFromFontInfo(Context context,
+            @Nullable CancellationSignal cancellationSignal, @NonNull FontInfo[] fonts, int style) {
+        return sTypefaceCompatImpl.createFromFontInfo(context, cancellationSignal, fonts, style);
     }
 }

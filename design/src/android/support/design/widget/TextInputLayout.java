@@ -64,6 +64,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewStructure;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.animation.AccelerateInterpolator;
 import android.widget.EditText;
@@ -121,6 +122,7 @@ public class TextInputLayout extends LinearLayout {
 
     private final FrameLayout mInputFrame;
     EditText mEditText;
+    private CharSequence mOriginalHint;
 
     private boolean mHintEnabled;
     private CharSequence mHint;
@@ -313,6 +315,24 @@ public class TextInputLayout extends LinearLayout {
         return mTypeface;
     }
 
+    @Override
+    public void dispatchProvideAutofillStructure(ViewStructure structure, int flags) {
+        if (mOriginalHint == null || mEditText == null) {
+            super.dispatchProvideAutofillStructure(structure, flags);
+            return;
+        }
+
+        // Temporarily sets child's hint to its original value so it is properly set in the
+        // child's ViewStructure.
+        final CharSequence hint = mEditText.getHint();
+        mEditText.setHint(mOriginalHint);
+        try {
+            super.dispatchProvideAutofillStructure(structure, flags);
+        } finally {
+            mEditText.setHint(hint);
+        }
+    }
+
     private void setEditText(EditText editText) {
         // If we already have an EditText, throw an exception
         if (mEditText != null) {
@@ -364,7 +384,9 @@ public class TextInputLayout extends LinearLayout {
 
         // If we do not have a valid hint, try and retrieve it from the EditText, if enabled
         if (mHintEnabled && TextUtils.isEmpty(mHint)) {
-            setHint(mEditText.getHint());
+            // Save the hint so it can be restored on dispatchProvideAutofillStructure();
+            mOriginalHint = mEditText.getHint();
+            setHint(mOriginalHint);
             // Clear the EditText's hint as we will display it ourselves
             mEditText.setHint(null);
         }
@@ -939,6 +961,7 @@ public class TextInputLayout extends LinearLayout {
 
     static class SavedState extends AbsSavedState {
         CharSequence error;
+        boolean isPasswordToggledVisible;
 
         SavedState(Parcelable superState) {
             super(superState);
@@ -947,6 +970,7 @@ public class TextInputLayout extends LinearLayout {
         SavedState(Parcel source, ClassLoader loader) {
             super(source, loader);
             error = TextUtils.CHAR_SEQUENCE_CREATOR.createFromParcel(source);
+            isPasswordToggledVisible = (source.readInt() == 1);
 
         }
 
@@ -954,6 +978,7 @@ public class TextInputLayout extends LinearLayout {
         public void writeToParcel(Parcel dest, int flags) {
             super.writeToParcel(dest, flags);
             TextUtils.writeToParcel(error, dest, flags);
+            dest.writeInt(isPasswordToggledVisible ? 1 : 0);
         }
 
         @Override
@@ -988,6 +1013,7 @@ public class TextInputLayout extends LinearLayout {
         if (mErrorShown) {
             ss.error = getError();
         }
+        ss.isPasswordToggledVisible = mPasswordToggledVisible;
         return ss;
     }
 
@@ -1000,6 +1026,9 @@ public class TextInputLayout extends LinearLayout {
         SavedState ss = (SavedState) state;
         super.onRestoreInstanceState(ss.getSuperState());
         setError(ss.error);
+        if (ss.isPasswordToggledVisible) {
+            passwordVisibilityToggleRequested(true);
+        }
         requestLayout();
     }
 
@@ -1078,7 +1107,7 @@ public class TextInputLayout extends LinearLayout {
                 mPasswordToggleView.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
-                        passwordVisibilityToggleRequested();
+                        passwordVisibilityToggleRequested(false);
                     }
                 });
             }
@@ -1291,7 +1320,7 @@ public class TextInputLayout extends LinearLayout {
         applyPasswordToggleTint();
     }
 
-    void passwordVisibilityToggleRequested() {
+    private void passwordVisibilityToggleRequested(boolean shouldSkipAnimations) {
         if (mPasswordToggleEnabled) {
             // Store the current cursor position
             final int selection = mEditText.getSelectionEnd();
@@ -1305,6 +1334,9 @@ public class TextInputLayout extends LinearLayout {
             }
 
             mPasswordToggleView.setChecked(mPasswordToggledVisible);
+            if (shouldSkipAnimations) {
+                mPasswordToggleView.jumpDrawablesToCurrentState();
+            }
 
             // And restore the cursor position
             mEditText.setSelection(selection);

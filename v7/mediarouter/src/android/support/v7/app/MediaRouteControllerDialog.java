@@ -39,6 +39,7 @@ import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
+import android.support.v4.util.ObjectsCompat;
 import android.support.v4.view.accessibility.AccessibilityEventCompat;
 import android.support.v7.app.OverlayListView.OverlayObject;
 import android.support.v7.graphics.Palette;
@@ -72,6 +73,7 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
+
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -199,8 +201,12 @@ public class MediaRouteControllerDialog extends AlertDialog {
     }
 
     public MediaRouteControllerDialog(Context context, int theme) {
+        // If we pass theme ID of 0 to AppCompatDialog, it will apply dialogTheme on the context,
+        // which may override our style settings. Passes our uppermost theme ID to prevent this.
         super(MediaRouterThemeHelper.createThemedContext(context,
-                MediaRouterThemeHelper.getAlertDialogResolvedTheme(context, theme)), theme);
+                MediaRouterThemeHelper.getAlertDialogResolvedTheme(context, theme)), theme == 0
+                ? MediaRouterThemeHelper.createThemeForDialog(context, MediaRouterThemeHelper
+                        .getAlertDialogResolvedTheme(context, theme)) : theme);
         mContext = getContext();
 
         mControllerCallback = new MediaControllerCallback();
@@ -1438,7 +1444,8 @@ public class MediaRouteControllerDialog extends AlertDialog {
         @Override
         protected void onPostExecute(Bitmap art) {
             mFetchArtTask = null;
-            if (mArtIconBitmap != mIconBitmap || mArtIconUri != mIconUri) {
+            if (!ObjectsCompat.equals(mArtIconBitmap, mIconBitmap)
+                    || !ObjectsCompat.equals(mArtIconUri, mIconUri)) {
                 mArtIconBitmap = mIconBitmap;
                 mArtIconLoadedBitmap = art;
                 mArtIconUri = mIconUri;

@@ -17,15 +17,21 @@
 package android.support.v4.app;
 
 import android.app.Service;
+import android.app.job.JobInfo;
+import android.app.job.JobParameters;
+import android.app.job.JobScheduler;
+import android.app.job.JobServiceEngine;
+import android.app.job.JobWorkItem;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.os.BuildCompat;
+import android.support.annotation.RequiresApi;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -87,12 +93,15 @@ public abstract class JobIntentService extends Service {
     static final boolean DEBUG = false;
 
     CompatJobEngine mJobImpl;
-    ArrayList<CompatWorkItem> mCompatQueue;
     WorkEnqueuer mCompatWorkEnqueuer;
     CommandProcessor mCurProcessor;
+    boolean mInterruptIfStopped = false;
+    boolean mStopped = false;
+
+    final ArrayList<CompatWorkItem> mCompatQueue;
 
     static final Object sLock = new Object();
-    static final HashMap<Class, WorkEnqueuer> sClassWorkEnqueuer = new HashMap<>();
+    static final HashMap<ComponentName, WorkEnqueuer> sClassWorkEnqueuer = new HashMap<>();
 
     /**
      * Base class for the target service we can deliver work to and the implementation of
@@ -104,8 +113,8 @@ public abstract class JobIntentService extends Service {
         boolean mHasJobId;
         int mJobId;
 
-        WorkEnqueuer(Context context, Class cls) {
-            mComponentName = new ComponentName(context, cls);
+        WorkEnqueuer(Context context, ComponentName cn) {
+            mComponentName = cn;
         }
 
         void ensureJobId(int jobId) {
@@ -148,16 +157,18 @@ public abstract class JobIntentService extends Service {
         boolean mLaunchingService;
         boolean mServiceRunning;
 
-        CompatWorkEnqueuer(Context context, Class cls) {
-            super(context, cls);
+        CompatWorkEnqueuer(Context context, ComponentName cn) {
+            super(context, cn);
             mContext = context.getApplicationContext();
             // Make wake locks.  We need two, because the launch wake lock wants to have
             // a timeout, and the system does not do the right thing if you mix timeout and
             // non timeout (or even changing the timeout duration) in one wake lock.
             PowerManager pm = ((PowerManager) context.getSystemService(Context.POWER_SERVICE));
-            mLaunchWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, cls.getName());
+            mLaunchWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                    cn.getClassName() + ":launch");
             mLaunchWakeLock.setReferenceCounted(false);
-            mRunWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, cls.getName());
+            mRunWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                    cn.getClassName() + ":run");
             mRunWakeLock.setReferenceCounted(false);
         }
 
@@ -219,6 +230,115 @@ public abstract class JobIntentService extends Service {
     }
 
     /**
+     * Implementation of a JobServiceEngine for interaction with JobIntentService.
+     */
+    @RequiresApi(26)
+    static final class JobServiceEngineImpl extends JobServiceEngine
+            implements JobIntentService.CompatJobEngine {
+        static final String TAG = "JobServiceEngineImpl";
+
+        static final boolean DEBUG = false;
+
+        final JobIntentService mService;
+        final Object mLock = new Object();
+        JobParameters mParams;
+
+        final class WrapperWorkItem implements JobIntentService.GenericWorkItem {
+            final JobWorkItem mJobWork;
+
+            WrapperWorkItem(JobWorkItem jobWork) {
+                mJobWork = jobWork;
+            }
+
+            @Override
+            public Intent getIntent() {
+                return mJobWork.getIntent();
+            }
+
+            @Override
+            public void complete() {
+                synchronized (mLock) {
+                    if (mParams != null) {
+                        mParams.completeWork(mJobWork);
+                    }
+                }
+            }
+        }
+
+        JobServiceEngineImpl(JobIntentService service) {
+            super(service);
+            mService = service;
+        }
+
+        @Override
+        public IBinder compatGetBinder() {
+            return getBinder();
+        }
+
+        @Override
+        public boolean onStartJob(JobParameters params) {
+            if (DEBUG) Log.d(TAG, "onStartJob: " + params);
+            mParams = params;
+            // We can now start dequeuing work!
+            mService.ensureProcessorRunningLocked();
+            return true;
+        }
+
+        @Override
+        public boolean onStopJob(JobParameters params) {
+            if (DEBUG) Log.d(TAG, "onStartJob: " + params);
+            boolean result = mService.doStopCurrentWork();
+            synchronized (mLock) {
+                // Once we return, the job is stopped, so its JobParameters are no
+                // longer valid and we should not be doing anything with them.
+                mParams = null;
+            }
+            return result;
+        }
+
+        /**
+         * Dequeue some work.
+         */
+        @Override
+        public JobIntentService.GenericWorkItem dequeueWork() {
+            JobWorkItem work;
+            synchronized (mLock) {
+                if (mParams == null) {
+                    return null;
+                }
+                work = mParams.dequeueWork();
+            }
+            if (work != null) {
+                work.getIntent().setExtrasClassLoader(mService.getClassLoader());
+                return new WrapperWorkItem(work);
+            } else {
+                return null;
+            }
+        }
+    }
+
+    @RequiresApi(26)
+    static final class JobWorkEnqueuer extends JobIntentService.WorkEnqueuer {
+        private final JobInfo mJobInfo;
+        private final JobScheduler mJobScheduler;
+
+        JobWorkEnqueuer(Context context, ComponentName cn, int jobId) {
+            super(context, cn);
+            ensureJobId(jobId);
+            JobInfo.Builder b = new JobInfo.Builder(jobId, mComponentName);
+            mJobInfo = b.setOverrideDeadline(0).build();
+            mJobScheduler = (JobScheduler) context.getApplicationContext().getSystemService(
+                    Context.JOB_SCHEDULER_SERVICE);
+        }
+
+        @Override
+        void enqueueWork(Intent work) {
+            if (DEBUG) Log.d(TAG, "Enqueueing work: " + work);
+            mJobScheduler.enqueue(mJobInfo, new JobWorkItem(work));
+        }
+    }
+
+    /**
      * Abstract definition of an item of work that is being dispatched.
      */
     interface GenericWorkItem {
@@ -274,13 +394,13 @@ public abstract class JobIntentService extends Service {
         }
 
         @Override
+        protected void onCancelled(Void aVoid) {
+            processorFinished();
+        }
+
+        @Override
         protected void onPostExecute(Void aVoid) {
-            if (mCompatQueue != null) {
-                synchronized (mCompatQueue) {
-                    mCurProcessor = null;
-                    checkForMoreCompatWorkLocked();
-                }
-            }
+            processorFinished();
         }
     }
 
@@ -288,20 +408,24 @@ public abstract class JobIntentService extends Service {
      * Default empty constructor.
      */
     public JobIntentService() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            mCompatQueue = null;
+        } else {
+            mCompatQueue = new ArrayList<>();
+        }
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
         if (DEBUG) Log.d(TAG, "CREATING: " + this);
-        if (BuildCompat.isAtLeastO()) {
+        if (Build.VERSION.SDK_INT >= 26) {
             mJobImpl = new JobServiceEngineImpl(this);
-            mCompatQueue = null;
             mCompatWorkEnqueuer = null;
         } else {
             mJobImpl = null;
-            mCompatQueue = new ArrayList<>();
-            mCompatWorkEnqueuer = getWorkEnqueuer(this, this.getClass(), false, 0);
+            ComponentName cn = new ComponentName(this, this.getClass());
+            mCompatWorkEnqueuer = getWorkEnqueuer(this, cn, false, 0);
             mCompatWorkEnqueuer.serviceCreated();
         }
     }
@@ -366,28 +490,45 @@ public abstract class JobIntentService extends Service {
      */
     public static void enqueueWork(@NonNull Context context, @NonNull Class cls, int jobId,
             @NonNull Intent work) {
+        enqueueWork(context, new ComponentName(context, cls), jobId, work);
+    }
+
+    /**
+     * Like {@link #enqueueWork(Context, Class, int, Intent)}, but supplies a ComponentName
+     * for the service to interact with instead of its class.
+     *
+     * @param context Context this is being called from.
+     * @param component The published ComponentName of the class this work should be
+     * dispatched to.
+     * @param jobId A unique job ID for scheduling; must be the same value for all work
+     * enqueued for the same class.
+     * @param work The Intent of work to enqueue.
+     */
+    public static void enqueueWork(@NonNull Context context, @NonNull ComponentName component,
+            int jobId, @NonNull Intent work) {
         if (work == null) {
             throw new IllegalArgumentException("work must not be null");
         }
         synchronized (sLock) {
-            WorkEnqueuer we = getWorkEnqueuer(context, cls, true, jobId);
+            WorkEnqueuer we = getWorkEnqueuer(context, component, true, jobId);
             we.ensureJobId(jobId);
             we.enqueueWork(work);
         }
     }
 
-    static WorkEnqueuer getWorkEnqueuer(Context context, Class cls, boolean hasJobId, int jobId) {
-        WorkEnqueuer we = sClassWorkEnqueuer.get(cls);
+    static WorkEnqueuer getWorkEnqueuer(Context context, ComponentName cn, boolean hasJobId,
+            int jobId) {
+        WorkEnqueuer we = sClassWorkEnqueuer.get(cn);
         if (we == null) {
-            if (BuildCompat.isAtLeastO()) {
+            if (Build.VERSION.SDK_INT >= 26) {
                 if (!hasJobId) {
                     throw new IllegalArgumentException("Can't be here without a job id");
                 }
-                we = new JobServiceEngineImpl.JobWorkEnqueuer(context, cls, jobId);
+                we = new JobWorkEnqueuer(context, cn, jobId);
             } else {
-                we = new CompatWorkEnqueuer(context, cls);
+                we = new CompatWorkEnqueuer(context, cn);
             }
-            sClassWorkEnqueuer.put(cls, we);
+            sClassWorkEnqueuer.put(cn, we);
         }
         return we;
     }
@@ -410,6 +551,28 @@ public abstract class JobIntentService extends Service {
     protected abstract void onHandleWork(@NonNull Intent intent);
 
     /**
+     * Control whether code executing in {@link #onHandleWork(Intent)} will be interrupted
+     * if the job is stopped.  By default this is false.  If called and set to true, any
+     * time {@link #onStopCurrentWork()} is called, the class will first call
+     * {@link AsyncTask#cancel(boolean) AsyncTask.cancel(true)} to interrupt the running
+     * task.
+     *
+     * @param interruptIfStopped Set to true to allow the system to interrupt actively
+     * running work.
+     */
+    public void setInterruptIfStopped(boolean interruptIfStopped) {
+        mInterruptIfStopped = interruptIfStopped;
+    }
+
+    /**
+     * Returns true if {@link #onStopCurrentWork()} has been called.  You can use this,
+     * while executing your work, to see if it should be stopped.
+     */
+    public boolean isStopped() {
+        return mStopped;
+    }
+
+    /**
      * This will be called if the JobScheduler has decided to stop this job.  The job for
      * this service does not have any constraints specified, so this will only generally happen
      * if the service exceeds the job's maximum execution time.
@@ -424,6 +587,14 @@ public abstract class JobIntentService extends Service {
         return true;
     }
 
+    boolean doStopCurrentWork() {
+        if (mCurProcessor != null) {
+            mCurProcessor.cancel(mInterruptIfStopped);
+        }
+        mStopped = true;
+        return onStopCurrentWork();
+    }
+
     void ensureProcessorRunningLocked() {
         if (mCurProcessor == null) {
             mCurProcessor = new CommandProcessor();
@@ -432,11 +603,22 @@ public abstract class JobIntentService extends Service {
         }
     }
 
-    void checkForMoreCompatWorkLocked() {
-        // The async task has finished, but we may have gotten more work scheduled in the
-        // meantime.  If so,
-        if (mCompatQueue != null && mCompatQueue.size() > 0) {
-            ensureProcessorRunningLocked();
+    void processorFinished() {
+        if (mCompatQueue != null) {
+            synchronized (mCompatQueue) {
+                mCurProcessor = null;
+                // The async task has finished, but we may have gotten more work scheduled in the
+                // meantime.  If so, we need to restart the new processor to execute it.  If there
+                // is no more work at this point, either the service is in the process of being
+                // destroyed (because we called stopSelf on the last intent started for it), or
+                // someone has already called startService with a new Intent that will be
+                // arriving shortly.  In either case, we want to just leave the service
+                // waiting -- either to get destroyed, or get a new onStartCommand() callback
+                // which will then kick off a new processor.
+                if (mCompatQueue != null && mCompatQueue.size() > 0) {
+                    ensureProcessorRunningLocked();
+                }
+            }
         }
     }
 

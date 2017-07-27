@@ -22,6 +22,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.AnyThread;
+import android.support.annotation.CheckResult;
 import android.support.annotation.ColorInt;
 import android.support.annotation.GuardedBy;
 import android.support.annotation.IntDef;
@@ -101,22 +102,52 @@ public class EmojiCompat {
     /**
      * EmojiCompat successfully initialized.
      */
-    public static final int LOAD_STATE_SUCCESS = 1;
+    public static final int LOAD_STATE_SUCCEEDED = 1;
 
     /**
      * An unrecoverable error occurred during initialization of EmojiCompat. Calls to functions
      * such as {@link #process(CharSequence)} will fail.
      */
-    public static final int LOAD_STATE_FAILURE = 2;
+    public static final int LOAD_STATE_FAILED = 2;
 
     /**
      * @hide
      */
     @RestrictTo(LIBRARY_GROUP)
-    @IntDef({LOAD_STATE_LOADING, LOAD_STATE_SUCCESS, LOAD_STATE_FAILURE})
+    @IntDef({LOAD_STATE_LOADING, LOAD_STATE_SUCCEEDED, LOAD_STATE_FAILED})
     @Retention(RetentionPolicy.SOURCE)
     public @interface LoadState {
     }
+
+    /**
+     * Replace strategy that uses the value given in {@link EmojiCompat.Config}.
+     */
+    public static final int REPLACE_STRATEGY_DEFAULT = 0;
+
+    /**
+     * Replace strategy to add {@link EmojiSpan}s for all emoji that were found.
+     */
+    public static final int REPLACE_STRATEGY_ALL = 1;
+
+    /**
+     * Replace strategy to add {@link EmojiSpan}s only for emoji that do not exist in the system.
+     */
+    public static final int REPLACE_STRATEGY_NON_EXISTENT = 2;
+
+    /**
+     * @hide
+     */
+    @RestrictTo(LIBRARY_GROUP)
+    @IntDef({REPLACE_STRATEGY_DEFAULT, REPLACE_STRATEGY_NON_EXISTENT, REPLACE_STRATEGY_ALL})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface ReplaceStrategy {
+    }
+
+    /**
+     * @hide
+     */
+    @RestrictTo(LIBRARY_GROUP)
+    static final int EMOJI_COUNT_UNLIMITED = Integer.MAX_VALUE;
 
     private static final Object sInstanceLock = new Object();
 
@@ -143,9 +174,9 @@ public class EmojiCompat {
     private final CompatInternal mHelper;
 
     /**
-     * MetadataLoader instance given in the Config instance.
+     * Metadata loader instance given in the Config instance.
      */
-    private final MetadataLoader mMetadataLoader;
+    private final MetadataRepoLoader mMetadataLoader;
 
     /**
      * @see Config#setReplaceAll(boolean)
@@ -185,8 +216,8 @@ public class EmojiCompat {
 
     /**
      * Initialize the singleton instance with a configuration. When used on devices running API 18
-     * or below, the singleton instance is immediately moved into {@link #LOAD_STATE_SUCCESS} state
-     * without loading any metadata.
+     * or below, the singleton instance is immediately moved into {@link #LOAD_STATE_SUCCEEDED}
+     * state without loading any metadata.
      *
      * @see EmojiCompat.Config
      */
@@ -231,6 +262,17 @@ public class EmojiCompat {
     }
 
     /**
+     * Used by the tests to set GlyphChecker for EmojiProcessor.
+     *
+     * @hide
+     */
+    @RestrictTo(LIBRARY_GROUP)
+    @VisibleForTesting
+    void setGlyphChecker(@NonNull final EmojiProcessor.GlyphChecker glyphChecker) {
+        mHelper.setGlyphChecker(glyphChecker);
+    }
+
+    /**
      * Return singleton EmojiCompat instance. Should be called after
      * {@link #init(EmojiCompat.Config)} is called to initialize the singleton instance.
      *
@@ -261,7 +303,7 @@ public class EmojiCompat {
         final Collection<InitCallback> initCallbacks = new ArrayList<>();
         mInitLock.writeLock().lock();
         try {
-            mLoadState = LOAD_STATE_SUCCESS;
+            mLoadState = LOAD_STATE_SUCCEEDED;
             initCallbacks.addAll(mInitCallbacks);
             mInitCallbacks.clear();
         } finally {
@@ -275,7 +317,7 @@ public class EmojiCompat {
         final Collection<InitCallback> initCallbacks = new ArrayList<>();
         mInitLock.writeLock().lock();
         try {
-            mLoadState = LOAD_STATE_FAILURE;
+            mLoadState = LOAD_STATE_FAILED;
             initCallbacks.addAll(mInitCallbacks);
             mInitCallbacks.clear();
         } finally {
@@ -302,7 +344,7 @@ public class EmojiCompat {
 
         mInitLock.writeLock().lock();
         try {
-            if (mLoadState == LOAD_STATE_SUCCESS || mLoadState == LOAD_STATE_FAILURE) {
+            if (mLoadState == LOAD_STATE_SUCCEEDED || mLoadState == LOAD_STATE_FAILED) {
                 mMainHandler.post(new ListenerDispatcher(initCallback, mLoadState));
             } else {
                 mInitCallbacks.add(initCallback);
@@ -329,10 +371,10 @@ public class EmojiCompat {
 
     /**
      * Returns loading state of the EmojiCompat instance. When used on devices running API 18 or
-     * below always returns {@link #LOAD_STATE_SUCCESS}.
+     * below always returns {@link #LOAD_STATE_SUCCEEDED}.
      *
-     * @return one of {@link #LOAD_STATE_LOADING}, {@link #LOAD_STATE_SUCCESS},
-     * {@link #LOAD_STATE_FAILURE}
+     * @return one of {@link #LOAD_STATE_LOADING}, {@link #LOAD_STATE_SUCCEEDED},
+     * {@link #LOAD_STATE_FAILED}
      */
     public @LoadState int getLoadState() {
         mInitLock.readLock().lock();
@@ -347,7 +389,7 @@ public class EmojiCompat {
      * @return {@code true} if EmojiCompat is successfully initialized
      */
     private boolean isInitialized() {
-        return getLoadState() == LOAD_STATE_SUCCESS;
+        return getLoadState() == LOAD_STATE_SUCCEEDED;
     }
 
     /**
@@ -472,10 +514,12 @@ public class EmojiCompat {
      * @throws IllegalStateException if not initialized yet
      * @see #process(CharSequence, int, int)
      */
+    @CheckResult
     public CharSequence process(@NonNull final CharSequence charSequence) {
         // since charSequence might be null here we have to check it. Passing through here to the
         // main function so that it can do all the checks including isInitialized. It will also
         // be the main point that decides what to return.
+        //noinspection ConstantConditions
         @IntRange(from = 0) final int length = charSequence == null ? 0 : charSequence.length();
         return process(charSequence, 0, length);
     }
@@ -506,9 +550,10 @@ public class EmojiCompat {
      *                                  {@code start > charSequence.length()},
      *                                  {@code end > charSequence.length()}
      */
+    @CheckResult
     public CharSequence process(@NonNull final CharSequence charSequence,
             @IntRange(from = 0) final int start, @IntRange(from = 0) final int end) {
-        return process(charSequence, start, end, EmojiProcessor.EMOJI_COUNT_UNLIMITED);
+        return process(charSequence, start, end, EMOJI_COUNT_UNLIMITED);
     }
 
     /**
@@ -540,9 +585,50 @@ public class EmojiCompat {
      *                                  {@code end > charSequence.length()}
      *                                  {@code maxEmojiCount < 0}
      */
+    @CheckResult
     public CharSequence process(@NonNull final CharSequence charSequence,
             @IntRange(from = 0) final int start, @IntRange(from = 0) final int end,
             @IntRange(from = 0) final int maxEmojiCount) {
+        return process(charSequence, start, end, maxEmojiCount, REPLACE_STRATEGY_DEFAULT);
+    }
+
+    /**
+     * Checks a given CharSequence for emojis, and adds EmojiSpans if any emojis are found.
+     * <p>
+     * <ul>
+     * <li>If no emojis are found, {@code charSequence} given as the input is returned without
+     * any changes. i.e. charSequence is a String, and no emojis are found, the same String is
+     * returned.</li>
+     * <li>If the given input is not a Spannable (such as String), and at least one emoji is found
+     * a new {@link android.text.Spannable} instance is returned. </li>
+     * <li>If the given input is a Spannable, the same instance is returned. </li>
+     * </ul>
+     * When used on devices running API 18 or below, returns the given {@code charSequence} without
+     * processing it.
+     *
+     * @param charSequence CharSequence to add the EmojiSpans, cannot be {@code null}
+     * @param start start index in the charSequence to look for emojis, should be greater than or
+     *              equal to {@code 0}, also less than {@code charSequence.length()}
+     * @param end end index in the charSequence to look for emojis, should be greater than or
+     *            equal to {@code start} parameter, also less than {@code charSequence.length()}
+     * @param maxEmojiCount maximum number of emojis in the {@code charSequence}, should be greater
+     *                      than or equal to {@code 0}
+     * @param replaceStrategy whether to replace all emoji with {@link EmojiSpan}s, should be one of
+     *                        {@link #REPLACE_STRATEGY_DEFAULT},
+     *                        {@link #REPLACE_STRATEGY_NON_EXISTENT},
+     *                        {@link #REPLACE_STRATEGY_ALL}
+     *
+     * @throws IllegalStateException if not initialized yet
+     * @throws IllegalArgumentException in the following cases:
+     *                                  {@code start < 0}, {@code end < 0}, {@code end < start},
+     *                                  {@code start > charSequence.length()},
+     *                                  {@code end > charSequence.length()}
+     *                                  {@code maxEmojiCount < 0}
+     */
+    @CheckResult
+    public CharSequence process(@NonNull final CharSequence charSequence,
+            @IntRange(from = 0) final int start, @IntRange(from = 0) final int end,
+            @IntRange(from = 0) final int maxEmojiCount, @ReplaceStrategy int replaceStrategy) {
         Preconditions.checkState(isInitialized(), "Not initialized yet");
         Preconditions.checkArgumentNonnegative(start, "start cannot be negative");
         Preconditions.checkArgumentNonnegative(end, "end cannot be negative");
@@ -550,6 +636,7 @@ public class EmojiCompat {
         Preconditions.checkArgument(start <= end, "start should be <= than end");
 
         // early return since there is nothing to do
+        //noinspection ConstantConditions
         if (charSequence == null) {
             return charSequence;
         }
@@ -564,7 +651,34 @@ public class EmojiCompat {
             return charSequence;
         }
 
-        return mHelper.process(charSequence, start, end, maxEmojiCount);
+        final boolean replaceAll;
+        switch (replaceStrategy) {
+            case REPLACE_STRATEGY_ALL:
+                replaceAll = true;
+                break;
+            case REPLACE_STRATEGY_NON_EXISTENT:
+                replaceAll = false;
+                break;
+            case REPLACE_STRATEGY_DEFAULT:
+            default:
+                replaceAll = mReplaceAll;
+                break;
+        }
+
+        return mHelper.process(charSequence, start, end, maxEmojiCount, replaceAll);
+    }
+
+    /**
+     * Returns signature for the currently loaded emoji assets. The signature is a SHA that is
+     * constructed using emoji assets. Can be used to detect if currently loaded asset is different
+     * then previous executions. When used on devices running API 18 or below, returns empty string.
+     *
+     * @throws IllegalStateException if not initialized yet
+     */
+    @NonNull
+    public String getAssetSignature() {
+        Preconditions.checkState(isInitialized(), "Not initialized yet");
+        return mHelper.getAssetSignature();
     }
 
     /**
@@ -581,6 +695,7 @@ public class EmojiCompat {
      */
     @RestrictTo(LIBRARY_GROUP)
     public void updateEditorInfoAttrs(@NonNull final EditorInfo outAttrs) {
+        //noinspection ConstantConditions
         if (isInitialized() && outAttrs != null && outAttrs.extras != null) {
             mHelper.updateEditorInfoAttrs(outAttrs);
         }
@@ -628,32 +743,32 @@ public class EmojiCompat {
     /**
      * Interface to load emoji metadata.
      */
-    public interface MetadataLoader {
+    public interface MetadataRepoLoader {
         /**
          * Start loading the metadata. When the loading operation is finished {@link
-         * LoaderCallback#onLoaded(MetadataRepo)} or {@link LoaderCallback#onFailed(Throwable)}
-         * should be called. When used on devices running API 18 or below, this function is never
-         * called.
+         * MetadataRepoLoaderCallback#onLoaded(MetadataRepo)} or
+         * {@link MetadataRepoLoaderCallback#onFailed(Throwable)} should be called. When used on
+         * devices running API 18 or below, this function is never called.
          *
          * @param loaderCallback callback to signal the loading state
          */
-        void load(@NonNull LoaderCallback loaderCallback);
+        void load(@NonNull MetadataRepoLoaderCallback loaderCallback);
     }
 
     /**
-     * Callback to inform EmojiCompat about the state of the metadata load. Passed to MetadataLoader
-     * during {@link MetadataLoader#load(LoaderCallback)} call.
+     * Callback to inform EmojiCompat about the state of the metadata load. Passed to
+     * MetadataRepoLoader during {@link MetadataRepoLoader#load(MetadataRepoLoaderCallback)} call.
      */
-    public abstract static class LoaderCallback {
+    public abstract static class MetadataRepoLoaderCallback {
         /**
-         * Called by {@link MetadataLoader} when metadata is loaded successfully.
+         * Called by {@link MetadataRepoLoader} when metadata is loaded successfully.
          *
          * @param metadataRepo MetadataRepo instance, cannot be {@code null}
          */
         public abstract void onLoaded(@NonNull MetadataRepo metadataRepo);
 
         /**
-         * Called by {@link MetadataLoader} if an error occurs while loading the metadata.
+         * Called by {@link MetadataRepoLoader} if an error occurs while loading the metadata.
          *
          * @param throwable the exception that caused the failure, {@code nullable}
          */
@@ -667,7 +782,7 @@ public class EmojiCompat {
      * @see #init(EmojiCompat.Config)
      */
     public abstract static class Config {
-        private final MetadataLoader mMetadataLoader;
+        private final MetadataRepoLoader mMetadataLoader;
         private boolean mReplaceAll;
         private Set<InitCallback> mInitCallbacks;
         private boolean mEmojiSpanIndicatorEnabled;
@@ -676,9 +791,9 @@ public class EmojiCompat {
         /**
          * Default constructor.
          *
-         * @param metadataLoader MetadataLoader instance, cannot be {@code null}
+         * @param metadataLoader MetadataRepoLoader instance, cannot be {@code null}
          */
-        protected Config(@NonNull final MetadataLoader metadataLoader) {
+        protected Config(@NonNull final MetadataRepoLoader metadataLoader) {
             Preconditions.checkNotNull(metadataLoader, "metadataLoader cannot be null.");
             mMetadataLoader = metadataLoader;
         }
@@ -755,11 +870,9 @@ public class EmojiCompat {
         }
 
         /**
-         * Returns the {@link MetadataLoader}.
-         * @hide
+         * Returns the {@link MetadataRepoLoader}.
          */
-        @RestrictTo(LIBRARY_GROUP)
-        public final MetadataLoader getMetadataLoader() {
+        protected final MetadataRepoLoader getMetadataRepoLoader() {
             return mMetadataLoader;
         }
     }
@@ -772,6 +885,7 @@ public class EmojiCompat {
         private final Throwable mThrowable;
         private final int mLoadState;
 
+        @SuppressWarnings("ArraysAsListWithZeroOrOneArgument")
         ListenerDispatcher(@NonNull final InitCallback initCallback,
                 @LoadState final int loadState) {
             this(Arrays.asList(Preconditions.checkNotNull(initCallback,
@@ -796,12 +910,12 @@ public class EmojiCompat {
         public void run() {
             final int size = mInitCallbacks.size();
             switch (mLoadState) {
-                case LOAD_STATE_SUCCESS:
+                case LOAD_STATE_SUCCEEDED:
                     for (int i = 0; i < size; i++) {
                         mInitCallbacks.get(i).onInitialized();
                     }
                     break;
-                case LOAD_STATE_FAILURE:
+                case LOAD_STATE_FAILED:
                 default:
                     for (int i = 0; i < size; i++) {
                         mInitCallbacks.get(i).onFailed(mThrowable);
@@ -815,7 +929,7 @@ public class EmojiCompat {
      * Internal helper class to behave no-op for certain functions.
      */
     private static class CompatInternal {
-        protected final EmojiCompat mEmojiCompat;
+        final EmojiCompat mEmojiCompat;
 
         CompatInternal(EmojiCompat emojiCompat) {
             mEmojiCompat = emojiCompat;
@@ -838,7 +952,7 @@ public class EmojiCompat {
 
         CharSequence process(@NonNull final CharSequence charSequence,
                 @IntRange(from = 0) final int start, @IntRange(from = 0) final int end,
-                @IntRange(from = 0) final int maxEmojiCount) {
+                @IntRange(from = 0) final int maxEmojiCount, boolean replaceAll) {
             // Returns the given charSequence as it is.
             return charSequence;
         }
@@ -846,10 +960,18 @@ public class EmojiCompat {
         void updateEditorInfoAttrs(@NonNull final EditorInfo outAttrs) {
             // Does not add any EditorInfo attributes.
         }
+
+        void setGlyphChecker(@NonNull EmojiProcessor.GlyphChecker glyphChecker) {
+            // intentionally empty
+        }
+
+        String getAssetSignature() {
+            return "";
+        }
     }
 
     @RequiresApi(19)
-    private static class CompatInternal19 extends CompatInternal {
+    private static final class CompatInternal19 extends CompatInternal {
         /**
          * Responsible to process a CharSequence and add the spans. @{code Null} until the time the
          * metadata is loaded.
@@ -869,7 +991,7 @@ public class EmojiCompat {
         @Override
         void loadMetadata() {
             try {
-                mEmojiCompat.mMetadataLoader.load(new LoaderCallback() {
+                final MetadataRepoLoaderCallback callback = new MetadataRepoLoaderCallback() {
                     @Override
                     public void onLoaded(@NonNull MetadataRepo metadataRepo) {
                         onMetadataLoadSuccess(metadataRepo);
@@ -879,13 +1001,15 @@ public class EmojiCompat {
                     public void onFailed(@Nullable Throwable throwable) {
                         mEmojiCompat.onMetadataLoadFailed(throwable);
                     }
-                });
+                };
+                mEmojiCompat.mMetadataLoader.load(callback);
             } catch (Throwable t) {
                 mEmojiCompat.onMetadataLoadFailed(t);
             }
         }
 
         private void onMetadataLoadSuccess(@NonNull final MetadataRepo metadataRepo) {
+            //noinspection ConstantConditions
             if (metadataRepo == null) {
                 mEmojiCompat.onMetadataLoadFailed(
                         new IllegalArgumentException("metadataRepo cannot be null"));
@@ -893,8 +1017,7 @@ public class EmojiCompat {
             }
 
             mMetadataRepo = metadataRepo;
-            mProcessor = new EmojiProcessor(mMetadataRepo, new SpanFactory(),
-                    mEmojiCompat.mReplaceAll);
+            mProcessor = new EmojiProcessor(mMetadataRepo, new SpanFactory());
 
             mEmojiCompat.onMetadataLoadSuccess();
         }
@@ -912,14 +1035,25 @@ public class EmojiCompat {
 
         @Override
         CharSequence process(@NonNull CharSequence charSequence, int start, int end,
-                int maxEmojiCount) {
-            return mProcessor.process(charSequence, start, end, maxEmojiCount);
+                int maxEmojiCount, boolean replaceAll) {
+            return mProcessor.process(charSequence, start, end, maxEmojiCount, replaceAll);
         }
 
         @Override
         void updateEditorInfoAttrs(@NonNull EditorInfo outAttrs) {
             outAttrs.extras.putInt(EDITOR_INFO_METAVERSION_KEY, mMetadataRepo.getMetadataVersion());
             outAttrs.extras.putBoolean(EDITOR_INFO_REPLACE_ALL_KEY, mEmojiCompat.mReplaceAll);
+        }
+
+        @Override
+        void setGlyphChecker(@NonNull EmojiProcessor.GlyphChecker glyphChecker) {
+            mProcessor.setGlyphChecker(glyphChecker);
+        }
+
+        @Override
+        String getAssetSignature() {
+            final String sha = mMetadataRepo.getMetadataList().sourceSha();
+            return sha == null ? "" : sha;
         }
     }
 }

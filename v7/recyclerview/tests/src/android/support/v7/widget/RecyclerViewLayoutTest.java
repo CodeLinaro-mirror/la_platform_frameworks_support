@@ -252,6 +252,66 @@ public class RecyclerViewLayoutTest extends BaseRecyclerViewInstrumentationTest 
     }
 
     @Test
+    public void preditiveMeasuredCrashTest() throws Throwable {
+        final RecyclerView rv = new RecyclerView(getActivity());
+        final LayoutAllLayoutManager lm = new LayoutAllLayoutManager(true) {
+            @Override
+            public void onAttachedToWindow(RecyclerView view) {
+                super.onAttachedToWindow(view);
+                assertThat(view.mLayout, is((RecyclerView.LayoutManager) this));
+            }
+
+            @Override
+            public void onDetachedFromWindow(RecyclerView view, RecyclerView.Recycler recycler) {
+                super.onDetachedFromWindow(view, recycler);
+                assertThat(view.mLayout, is((RecyclerView.LayoutManager) this));
+            }
+
+            @Override
+            public void onMeasure(RecyclerView.Recycler recycler, RecyclerView.State state,
+                    int widthSpec,
+                    int heightSpec) {
+                if (state.getItemCount() > 0) {
+                    // A typical LayoutManager will use a child view to measure the size.
+                    View v = recycler.getViewForPosition(0);
+                }
+                super.onMeasure(recycler, state, widthSpec, heightSpec);
+            }
+        };
+        lm.setSupportsPredictive(true);
+        lm.setAutoMeasureEnabled(false);
+        rv.setHasFixedSize(false);
+        final TestAdapter adapter = new TestAdapter(0);
+        rv.setAdapter(adapter);
+        rv.setLayoutManager(lm);
+        lm.expectLayouts(1);
+        setRecyclerView(rv);
+        lm.waitForLayout(2);
+        mActivityRule.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                ViewGroup parent = (ViewGroup) rv.getParent();
+                parent.removeView(rv);
+                // setting RV as child of LinearLayout using MATCH_PARENT will cause
+                // RV.onMeasure() being called twice before layout(). This may cause crash.
+                LinearLayout linearLayout = new LinearLayout(parent.getContext());
+                linearLayout.setOrientation(LinearLayout.VERTICAL);
+                parent.addView(linearLayout,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
+                linearLayout.addView(rv, ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
+
+            }
+        });
+
+        lm.expectLayouts(1);
+        adapter.addAndNotify(1);
+        lm.waitForLayout(2);
+        checkForMainThreadException();
+    }
+
+    @Test
     public void detachRvAndLayoutManagerProperly() throws Throwable {
         final RecyclerView rv = new RecyclerView(getActivity());
         final LayoutAllLayoutManager lm = new LayoutAllLayoutManager(true) {
@@ -4569,6 +4629,76 @@ public class RecyclerViewLayoutTest extends BaseRecyclerViewInstrumentationTest 
                 @ViewCompat.NestedScrollType int type) {
             super.onStopNestedScroll(target, type);
         }
+    }
+
+    @Test
+    public void testRemainingScrollInLayout() throws Throwable {
+        final RecyclerView recyclerView = new RecyclerView(getActivity());
+        final TestAdapter adapter = new TestAdapter(100);
+
+        final CountDownLatch firstScrollDone = new CountDownLatch(1);
+        final CountDownLatch scrollFinished = new CountDownLatch(1);
+        final int[] totalScrollDistance = new int[] {0};
+        recyclerView.setLayoutManager(new TestLayoutManager() {
+            @Override
+            public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+                if (firstScrollDone.getCount() < 1 && scrollFinished.getCount() == 1) {
+                    try {
+                        assertTrue("layout pass has remaining scroll",
+                                state.getRemainingScrollVertical() != 0);
+                        assertEquals("layout pass has remaining scroll",
+                                1000 - totalScrollDistance[0], state.getRemainingScrollVertical());
+                    } catch (Throwable throwable) {
+                        postExceptionToInstrumentation(throwable);
+                    }
+                }
+                super.onLayoutChildren(recycler, state);
+            }
+
+            @Override
+            public int scrollVerticallyBy(int dy, RecyclerView.Recycler recycler,
+                    RecyclerView.State state) {
+                firstScrollDone.countDown();
+                totalScrollDistance[0] += dy;
+                if (state.getRemainingScrollVertical() == 0) {
+                    // the last scroll pass will have remaining 0
+                    scrollFinished.countDown();
+                }
+                return super.scrollVerticallyBy(dy, recycler, state);
+            }
+
+            @Override
+            public boolean canScrollVertically() {
+                return true;
+            }
+        });
+        recyclerView.setAdapter(adapter);
+        mActivityRule.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    setRecyclerView(recyclerView);
+                    recyclerView.smoothScrollBy(0, 1000);
+                } catch (Throwable throwable) {
+                    postExceptionToInstrumentation(throwable);
+                }
+            }
+        });
+
+        firstScrollDone.await(1, TimeUnit.SECONDS);
+        mActivityRule.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    recyclerView.requestLayout();
+                } catch (Throwable throwable) {
+                    postExceptionToInstrumentation(throwable);
+                }
+            }
+        });
+        waitForIdleScroll(recyclerView);
+        assertTrue(scrollFinished.getCount() < 1);
+        assertEquals(totalScrollDistance[0], 1000);
     }
 
 }
