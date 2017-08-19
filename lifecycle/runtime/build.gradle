@@ -1,3 +1,5 @@
+import android.support.LibraryVersions
+
 apply plugin: 'com.android.library'
 apply plugin: 'maven'
 
@@ -31,7 +33,7 @@ android {
 
 dependencies {
     compile project(":lifecycle:common")
-    compile project(":arch:runtime")
+    compile project(":arch:common")
     // necessary for IJ to resolve dependencies.
     compile libs.support.annotations
 
@@ -44,5 +46,4 @@ dependencies {
 }
 
 createAndroidCheckstyle(project)
-
-archivesBaseName = "runtime"
+version = LibraryVersions.LIFECYCLES.toString()
