@@ -16,10 +16,12 @@
 
 package android.arch.persistence.room.integration.testapp.database;
 
+import android.arch.paging.LivePagedListProvider;
 import android.arch.persistence.room.Dao;
 import android.arch.persistence.room.Insert;
 import android.arch.persistence.room.Query;
-import android.arch.util.paging.LivePagedListProvider;
+
+import java.util.List;
 
 /**
  * Simple Customer DAO for Room Customer list sample.
@@ -43,9 +45,32 @@ public interface CustomerDao {
 
     /**
      * @return LivePagedListProvider of customers, ordered by last name. Call
-     * {@link LivePagedListProvider#create(android.arch.util.paging.PagedList.Config)} to get a
-     * LiveData of PagedLists.
+     * {@link LivePagedListProvider#create(Object, android.arch.paging.PagedList.Config)} to
+     * get a LiveData of PagedLists.
      */
     @Query("SELECT * FROM customer ORDER BY mLastName ASC")
-    LivePagedListProvider<Customer> loadPagedAgeOrder();
+    LivePagedListProvider<Integer, Customer> loadPagedAgeOrder();
+
+    /**
+     * @return number of customers
+     */
+    @Query("SELECT COUNT(*) FROM customer")
+    int countCustomers();
+
+    // Keyed
+
+    @Query("SELECT * from customer ORDER BY mLastName ASC LIMIT :limit")
+    List<Customer> customerNameInitial(int limit);
+
+    @Query("SELECT * from customer WHERE mLastName < :key ORDER BY mLastName DESC LIMIT :limit")
+    List<Customer> customerNameLoadAfter(String key, int limit);
+
+    @Query("SELECT COUNT(*) from customer WHERE mLastName < :key ORDER BY mLastName DESC")
+    int customerNameCountAfter(String key);
+
+    @Query("SELECT * from customer WHERE mLastName > :key ORDER BY mLastName ASC LIMIT :limit")
+    List<Customer> customerNameLoadBefore(String key, int limit);
+
+    @Query("SELECT COUNT(*) from customer WHERE mLastName > :key ORDER BY mLastName ASC")
+    int customerNameCountBefore(String key);
 }
