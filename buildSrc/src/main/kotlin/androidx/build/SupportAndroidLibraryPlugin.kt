@@ -160,11 +160,9 @@ private fun setUpLint(lintOptions: LintOptions, baseline: File, verifyTranslatio
     lintOptions.isNoLines = false
     lintOptions.isQuiet = true
 
-    //lintOptions.fatal("NewApi")
+    lintOptions.fatal("NewApi")
     lintOptions.fatal("ObsoleteSdkInt")
-    lintOptions.disable("NewApi")
-    lintOptions.disable("MissingPermission")
-    lintOptions.disable("ResourceType")
+    lintOptions.fatal("VisibleForTests")
 
     if (verifyTranslations) {
         lintOptions.fatal("MissingTranslation")
