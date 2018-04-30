@@ -23,6 +23,7 @@ import static android.app.slice.Slice.HINT_SHORTCUT;
 import static android.app.slice.Slice.HINT_SUMMARY;
 import static android.app.slice.Slice.HINT_TITLE;
 import static android.app.slice.Slice.SUBTYPE_CONTENT_DESCRIPTION;
+import static android.app.slice.Slice.SUBTYPE_RANGE;
 import static android.app.slice.SliceItem.FORMAT_ACTION;
 import static android.app.slice.SliceItem.FORMAT_IMAGE;
 import static android.app.slice.SliceItem.FORMAT_INT;
@@ -34,7 +35,6 @@ import static android.app.slice.SliceItem.FORMAT_TIMESTAMP;
 import static androidx.slice.core.SliceHints.HINT_KEYWORDS;
 import static androidx.slice.core.SliceHints.HINT_LAST_UPDATED;
 import static androidx.slice.core.SliceHints.HINT_TTL;
-import static androidx.slice.core.SliceHints.SUBTYPE_RANGE;
 
 import android.content.Context;
 import android.text.TextUtils;
@@ -75,14 +75,14 @@ public class RowContent {
     private int mLineCount = 0;
     private int mMaxHeight;
     private int mMinHeight;
-    private int mMaxRangeHeight;
+    private int mRangeHeight;
 
     public RowContent(Context context, SliceItem rowSlice, boolean isHeader) {
         populate(rowSlice, isHeader);
         mMaxHeight = context.getResources().getDimensionPixelSize(R.dimen.abc_slice_row_max_height);
         mMinHeight = context.getResources().getDimensionPixelSize(R.dimen.abc_slice_row_min_height);
-        mMaxRangeHeight = context.getResources().getDimensionPixelSize(
-                R.dimen.abc_slice_row_range_max_height);
+        mRangeHeight = context.getResources().getDimensionPixelSize(
+                R.dimen.abc_slice_row_range_height);
     }
 
     /**
@@ -155,23 +155,18 @@ public class RowContent {
             if (hasText(mSubtitleItem)) {
                 mLineCount++;
             }
-            // Special rules for end items: only one timestamp, can't be mixture of icons / actions
+            // Special rules for end items: only one timestamp
             boolean hasTimestamp = mStartItem != null
                     && FORMAT_TIMESTAMP.equals(mStartItem.getFormat());
-            String desiredFormat = null;
             for (int i = 0; i < endItems.size(); i++) {
                 final SliceItem item = endItems.get(i);
-                boolean isAction = FORMAT_SLICE.equals(item.getFormat())
-                        && item.hasHint(HINT_SHORTCUT);
+                boolean isAction = SliceQuery.find(item, FORMAT_ACTION) != null;
                 if (FORMAT_TIMESTAMP.equals(item.getFormat())) {
                     if (!hasTimestamp) {
                         hasTimestamp = true;
                         mEndItems.add(item);
                     }
-                } else if (desiredFormat == null) {
-                    desiredFormat = item.getFormat();
-                    processContent(item, isAction);
-                } else if (desiredFormat.equals(item.getFormat())) {
+                } else {
                     processContent(item, isAction);
                 }
             }
@@ -283,8 +278,8 @@ public class RowContent {
      * @return the height to display a row at when it is used as a small template.
      */
     public int getSmallHeight() {
-        return (getRange() != null && mLineCount > 1)
-                ? mMaxRangeHeight
+        return getRange() != null
+                ? getActualHeight()
                 : mMaxHeight;
     }
 
@@ -295,10 +290,15 @@ public class RowContent {
         if (!isValid()) {
             return 0;
         }
-        if (getRange() != null && mLineCount > 1) {
-            return mMaxRangeHeight;
+        int rowHeight = (getLineCount() > 1 || mIsHeader) ? mMaxHeight : mMinHeight;
+        if (getRange() != null) {
+            if (getLineCount() > 0) {
+                rowHeight += mRangeHeight;
+            } else {
+                rowHeight = mIsHeader ? mMaxHeight : mRangeHeight;
+            }
         }
-        return (getLineCount() > 1 || mIsHeader) ? mMaxHeight : mMinHeight;
+        return rowHeight;
     }
 
     private static boolean hasText(SliceItem textSlice) {
@@ -324,6 +324,7 @@ public class RowContent {
                 || mTitleItem != null
                 || mSubtitleItem != null
                 || mEndItems.size() > 0
+                || mRange != null
                 || isDefaultSeeMore();
     }
 

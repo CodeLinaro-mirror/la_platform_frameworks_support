@@ -285,8 +285,13 @@ public class WebViewCompat {
                 webviewPackageName = (String) webviewUpdateServiceClass.getMethod(
                         "getCurrentWebViewPackageName").invoke(null);
             }
-        } catch (ClassNotFoundException | IllegalAccessException | InvocationTargetException
-                | NoSuchMethodException  e) {
+        } catch (ClassNotFoundException e) {
+            return null;
+        } catch (IllegalAccessException e) {
+            return null;
+        } catch (InvocationTargetException e) {
+            return null;
+        } catch (NoSuchMethodException e) {
             return null;
         }
         if (webviewPackageName == null) return null;
@@ -313,7 +318,7 @@ public class WebViewCompat {
     @SuppressWarnings("NewApi")
     private static void checkThread(WebView webview) {
         if (BuildCompat.isAtLeastP()) {
-            if (webview.getLooper() != Looper.myLooper()) {
+            if (webview.getWebViewLooper() != Looper.myLooper()) {
                 throw new RuntimeException("A WebView method was called on thread '"
                         + Thread.currentThread().getName() + "'. "
                         + "All WebView methods must be called on the same thread. "

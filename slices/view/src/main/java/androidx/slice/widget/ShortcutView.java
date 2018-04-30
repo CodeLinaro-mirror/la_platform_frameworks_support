@@ -39,6 +39,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.OvalShape;
 import android.net.Uri;
+import android.util.Log;
 import android.widget.ImageView;
 
 import androidx.annotation.RestrictTo;
@@ -114,7 +115,7 @@ public class ShortcutView extends SliceChildView {
         if (!callOnClick()) {
             try {
                 if (mActionItem != null) {
-                    mActionItem.getAction().send();
+                    mActionItem.fireAction(null, null);
                 } else {
                     Intent intent = new Intent(Intent.ACTION_VIEW).setData(mUri);
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -131,7 +132,7 @@ public class ShortcutView extends SliceChildView {
                     mObserver.onSliceAction(ei, interactedItem);
                 }
             } catch (CanceledException e) {
-                e.printStackTrace();
+                Log.e(TAG, "PendingIntent for slice cannot be sent", e);
             }
         }
         return true;
