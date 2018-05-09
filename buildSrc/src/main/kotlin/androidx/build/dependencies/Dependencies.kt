@@ -16,13 +16,10 @@
 
 package androidx.build.dependencies
 
-import org.gradle.api.artifacts.ExternalModuleDependency
-import org.gradle.kotlin.dsl.exclude
-
 const val AUTO_COMMON = "com.google.auto:auto-common:0.6"
 const val ANTLR = "org.antlr:antlr4:4.5.3"
 const val APACHE_COMMONS_CODEC = "commons-codec:commons-codec:1.10"
-const val CONSTRAINT_LAYOUT = "com.android.support.constraint:constraint-layout:1.0.2@aar"
+const val CONSTRAINT_LAYOUT = "androidx.constraintlayout:constraintlayout:1.1.0@aar"
 const val DEXMAKER_MOCKITO = "com.linkedin.dexmaker:dexmaker-mockito:2.2.0"
 const val ESPRESSO_CONTRIB = "com.android.support.test.espresso:espresso-contrib:3.0.1"
 const val ESPRESSO_CORE = "com.android.support.test.espresso:espresso-core:3.0.1"
@@ -37,7 +34,7 @@ const val JSR250 = "javax.annotation:javax.annotation-api:1.2"
 const val JUNIT = "junit:junit:4.12"
 const val KOTLIN_STDLIB = "org.jetbrains.kotlin:kotlin-stdlib:1.2.20"
 const val KOTLIN_METADATA = "me.eugeniomarletti:kotlin-metadata:1.2.1"
-const val LINT = "com.android.tools.lint:lint:26.0.0"
+const val LINT = "com.android.tools.lint:lint:26.2.0-alpha13"
 const val MOCKITO_CORE = "org.mockito:mockito-core:2.7.6"
 const val MULTIDEX = "androidx.multidex:multidex:2.0.0"
 const val NULLAWAY = "com.uber.nullaway:nullaway:0.3.7"
@@ -88,15 +85,3 @@ const val ARCH_LIFECYCLE_LIVEDATA_CORE =
         "androidx.lifecycle:lifecycle-livedata-core:2.0.0-alpha1@aar"
 const val ARCH_LIFECYCLE_VIEWMODEL = "androidx.lifecycle:lifecycle-viewmodel:2.0.0-alpha1@aar"
 const val ARCH_LIFECYCLE_EXTENSIONS = "androidx.lifecycle:lifecycle-extensions:2.0.0-alpha1@aar"
-
-// Excludes
-val ESPRESSO_EXCLUDE: ExternalModuleDependency.() -> Unit = {
-    exclude(group = "androidx.annotation")
-    exclude(group = "androidx.appcompat")
-    exclude(group = "androidx.recyclerview")
-    exclude(group = "androidx.legacy")
-}
-
-val BYTEBUDDY_EXCLUDE: ExternalModuleDependency.() -> Unit = {
-    exclude(group = "net.bytebuddy")
-}

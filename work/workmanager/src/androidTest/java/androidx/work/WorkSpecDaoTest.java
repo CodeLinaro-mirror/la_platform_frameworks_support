@@ -47,16 +47,16 @@ public class WorkSpecDaoTest extends DatabaseTest {
     public void testEligibleWorkSpecsForScheduling() {
         long startTime = System.currentTimeMillis();
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(
+                .setPeriodStartTime(
                         startTime + TimeUnit.HOURS.toMillis(1),
                         TimeUnit.MILLISECONDS)
                 .build();
         OneTimeWorkRequest succeeded = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
-                .withInitialState(SUCCEEDED)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setInitialState(SUCCEEDED)
                 .build();
         OneTimeWorkRequest enqueued = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
                 .build();
 
         insertWork(work);
@@ -77,22 +77,22 @@ public class WorkSpecDaoTest extends DatabaseTest {
 
         long startTime = System.currentTimeMillis();
         OneTimeWorkRequest enqueued = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
                 .build();
         OneTimeWorkRequest succeeded = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
-                .withInitialState(SUCCEEDED)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setInitialState(SUCCEEDED)
                 .build();
         OneTimeWorkRequest failed = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
-                .withInitialState(FAILED)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setInitialState(FAILED)
                 .build();
 
         insertWork(enqueued);
-        workSpecDao.markWorkSpecScheduled(enqueued.getId(), startTime);
+        workSpecDao.markWorkSpecScheduled(enqueued.getStringId(), startTime);
 
         insertWork(succeeded);
         insertWork(failed);
@@ -110,27 +110,27 @@ public class WorkSpecDaoTest extends DatabaseTest {
 
         long startTime = System.currentTimeMillis();
         OneTimeWorkRequest enqueued = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
                 .build();
         OneTimeWorkRequest succeeded = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
-                .withInitialState(SUCCEEDED)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setInitialState(SUCCEEDED)
                 .build();
         OneTimeWorkRequest blocked = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
-                .withInitialState(BLOCKED)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setInitialState(BLOCKED)
                 .build();
         OneTimeWorkRequest failed = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
-                .withPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
-                .withInitialState(FAILED)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setInitialState(FAILED)
                 .build();
 
         insertWork(enqueued);
-        workSpecDao.markWorkSpecScheduled(enqueued.getId(), startTime);
+        workSpecDao.markWorkSpecScheduled(enqueued.getStringId(), startTime);
 
         insertWork(succeeded);
         insertWork(failed);
@@ -141,6 +141,6 @@ public class WorkSpecDaoTest extends DatabaseTest {
         List<WorkSpec> eligibleWorkSpecs = workSpecDao.getEligibleWorkForScheduling();
         assertThat(eligibleWorkSpecs.size(), is(1));
         // Not using contains in any order as the scheduleRequestedAt changes post reset.
-        assertThat(eligibleWorkSpecs.get(0).id, is(enqueued.getId()));
+        assertThat(eligibleWorkSpecs.get(0).id, is(enqueued.getStringId()));
     }
 }

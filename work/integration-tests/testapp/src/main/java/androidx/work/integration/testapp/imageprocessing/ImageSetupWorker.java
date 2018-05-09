@@ -46,12 +46,12 @@ public class ImageSetupWorker extends Worker {
         Image image = new Image();
         image.mOriginalAssetName = uriString;
         image.mIsProcessed = false;
-        TestDatabase.getInstance(getAppContext()).getImageDao().insert(image);
+        TestDatabase.getInstance(getApplicationContext()).getImageDao().insert(image);
         return WorkerResult.SUCCESS;
     }
 
     static OneTimeWorkRequest createWork(String uriString) {
         Data input = new Data.Builder().putString(URI_KEY, uriString).build();
-        return new OneTimeWorkRequest.Builder(ImageSetupWorker.class).withInputData(input).build();
+        return new OneTimeWorkRequest.Builder(ImageSetupWorker.class).setInputData(input).build();
     }
 }

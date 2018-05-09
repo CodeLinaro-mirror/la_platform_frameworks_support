@@ -152,11 +152,11 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     @Test
     public void testSchedule() throws InterruptedException {
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withInitialDelay(TimeUnit.HOURS.toMillis(1), TimeUnit.MILLISECONDS).build();
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setInitialDelay(TimeUnit.HOURS.toMillis(1), TimeUnit.MILLISECONDS).build();
 
         insertWork(work);
-        String workSpecId = work.getId();
+        String workSpecId = work.getStringId();
         final Intent intent = CommandHandler.createScheduleWorkIntent(mContext, workSpecId);
         mSpyDispatcher.postOnMainThread(
                 new SystemAlarmDispatcher.AddRunnable(mSpyDispatcher, intent, START_ID));
@@ -166,11 +166,11 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     @Test
     public void testDelayMet_success() throws InterruptedException {
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
                 .build();
 
         insertWork(work);
-        String workSpecId = work.getId();
+        String workSpecId = work.getStringId();
         final Intent intent = CommandHandler.createDelayMetIntent(mContext, workSpecId);
         mSpyDispatcher.postOnMainThread(
                 new SystemAlarmDispatcher.AddRunnable(mSpyDispatcher, intent, START_ID));
@@ -183,12 +183,12 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     public void testDelayMet_withStop() throws InterruptedException {
         // SleepTestWorker sleeps for 5 seconds
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(SleepTestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withInitialDelay(TimeUnit.HOURS.toMillis(1), TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setInitialDelay(TimeUnit.HOURS.toMillis(1), TimeUnit.MILLISECONDS)
                 .build();
 
         insertWork(work);
-        String workSpecId = work.getId();
+        String workSpecId = work.getStringId();
 
         final Intent delayMet = CommandHandler.createDelayMetIntent(mContext, workSpecId);
         final Intent stopWork = CommandHandler.createStopWorkIntent(mContext, workSpecId);
@@ -209,11 +209,11 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     @Test
     public void testDelayMet_withStopWhenCancelled() throws InterruptedException {
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(SleepTestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
                 .build();
 
         insertWork(work);
-        String workSpecId = work.getId();
+        String workSpecId = work.getStringId();
 
         final Intent scheduleWork = CommandHandler.createDelayMetIntent(mContext, workSpecId);
         final Intent stopWork = CommandHandler.createStopWorkIntent(mContext, workSpecId);
@@ -235,16 +235,16 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     public void testSchedule_withConstraints() throws InterruptedException {
         when(mBatteryChargingTracker.getInitialState()).thenReturn(true);
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(
+                .setPeriodStartTime(
                         System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1),
                         TimeUnit.MILLISECONDS)
-                .withConstraints(new Constraints.Builder()
+                .setConstraints(new Constraints.Builder()
                         .setRequiresCharging(true)
                         .build())
                 .build();
 
         insertWork(work);
-        String workSpecId = work.getId();
+        String workSpecId = work.getStringId();
 
         final Intent scheduleWork = CommandHandler.createScheduleWorkIntent(mContext, workSpecId);
 
@@ -260,12 +260,12 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     @Test
     public void testConstraintsChanged_withNoConstraints() throws InterruptedException {
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withScheduleRequestedAt(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setScheduleRequestedAt(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
                 .build();
 
         insertWork(work);
-        String workSpecId = work.getId();
+        String workSpecId = work.getStringId();
         final Intent constraintChanged = CommandHandler.createConstraintsChangedIntent(mContext);
         mSpyDispatcher.postOnMainThread(
                 new SystemAlarmDispatcher.AddRunnable(mSpyDispatcher, constraintChanged, START_ID));
@@ -280,11 +280,11 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     public void testConstraintsChangedMarkedNotScheduled_withNoConstraints()
             throws InterruptedException {
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
                 .build();
 
         insertWork(work);
-        String workSpecId = work.getId();
+        String workSpecId = work.getStringId();
         final Intent constraintChanged = CommandHandler.createConstraintsChangedIntent(mContext);
         mSpyDispatcher.postOnMainThread(
                 new SystemAlarmDispatcher.AddRunnable(mSpyDispatcher, constraintChanged, START_ID));
@@ -298,8 +298,8 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     public void testConstraintsChanged_withConstraint() throws InterruptedException {
         when(mBatteryChargingTracker.getInitialState()).thenReturn(true);
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withConstraints(new Constraints.Builder()
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setConstraints(new Constraints.Builder()
                         .setRequiresCharging(true)
                         .build())
                 .build();
@@ -316,15 +316,15 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     public void testDelayMet_withUnMetConstraint() throws InterruptedException {
         when(mBatteryChargingTracker.getInitialState()).thenReturn(false);
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withConstraints(new Constraints.Builder()
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setConstraints(new Constraints.Builder()
                         .setRequiresCharging(true)
                         .build())
                 .build();
 
         insertWork(work);
 
-        Intent delayMet = CommandHandler.createDelayMetIntent(mContext, work.getId());
+        Intent delayMet = CommandHandler.createDelayMetIntent(mContext, work.getStringId());
         mSpyDispatcher.postOnMainThread(
                 new SystemAlarmDispatcher.AddRunnable(mSpyDispatcher, delayMet, START_ID));
 
@@ -332,7 +332,7 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
 
         List<String> intentActions = intentActionsFor(mSpyDispatcher.getCommands());
         WorkSpecDao workSpecDao = mDatabase.workSpecDao();
-        WorkSpec workSpec = workSpecDao.getWorkSpec(work.getId());
+        WorkSpec workSpec = workSpecDao.getWorkSpec(work.getStringId());
 
         assertThat(mLatch.getCount(), is(0L));
         // Verify order of events
@@ -349,15 +349,15 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     public void testDelayMet_withMetConstraint() throws InterruptedException {
         when(mBatteryChargingTracker.getInitialState()).thenReturn(true);
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withConstraints(new Constraints.Builder()
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setConstraints(new Constraints.Builder()
                         .setRequiresCharging(true)
                         .build())
                 .build();
 
         insertWork(work);
 
-        Intent delayMet = CommandHandler.createDelayMetIntent(mContext, work.getId());
+        Intent delayMet = CommandHandler.createDelayMetIntent(mContext, work.getStringId());
         mSpyDispatcher.postOnMainThread(
                 new SystemAlarmDispatcher.AddRunnable(mSpyDispatcher, delayMet, START_ID));
 
@@ -365,7 +365,7 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
 
         List<String> intentActions = intentActionsFor(mSpyDispatcher.getCommands());
         WorkSpecDao workSpecDao = mDatabase.workSpecDao();
-        WorkSpec workSpec = workSpecDao.getWorkSpec(work.getId());
+        WorkSpec workSpec = workSpecDao.getWorkSpec(work.getStringId());
 
         assertThat(mLatch.getCount(), is(0L));
         // Assert order of events
@@ -385,22 +385,22 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
         when(mWorkManager.getSchedulers()).thenReturn(Collections.singletonList(scheduler));
 
         OneTimeWorkRequest failed = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withInitialState(State.FAILED)
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setInitialState(State.FAILED)
                 .build();
 
         OneTimeWorkRequest succeeded = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withInitialState(State.SUCCEEDED)
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setInitialState(State.SUCCEEDED)
                 .build();
 
         OneTimeWorkRequest noConstraints = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
                 .build();
 
         OneTimeWorkRequest workWithConstraints = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .withPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
-                .withConstraints(new Constraints.Builder()
+                .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
+                .setConstraints(new Constraints.Builder()
                         .setRequiresCharging(true)
                         .build())
                 .build();
@@ -428,10 +428,10 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
         }
 
         assertThat(capturedIds.size(), is(2));
-        assertThat(capturedIds.contains(noConstraints.getId()), is(true));
-        assertThat(capturedIds.contains(workWithConstraints.getId()), is(true));
-        assertThat(capturedIds.contains(failed.getId()), is(false));
-        assertThat(capturedIds.contains(succeeded.getId()), is(false));
+        assertThat(capturedIds.contains(noConstraints.getStringId()), is(true));
+        assertThat(capturedIds.contains(workWithConstraints.getStringId()), is(true));
+        assertThat(capturedIds.contains(failed.getStringId()), is(false));
+        assertThat(capturedIds.contains(succeeded.getStringId()), is(false));
     }
 
     private static List<String> intentActionsFor(@NonNull List<Intent> intents) {

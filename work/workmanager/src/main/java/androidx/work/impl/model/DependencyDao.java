@@ -16,7 +16,7 @@
 
 package androidx.work.impl.model;
 
-import static android.arch.persistence.room.OnConflictStrategy.FAIL;
+import static android.arch.persistence.room.OnConflictStrategy.IGNORE;
 
 import android.arch.persistence.room.Dao;
 import android.arch.persistence.room.Insert;
@@ -34,7 +34,7 @@ public interface DependencyDao {
      *
      * @param dependency The {@link Dependency}s to insert
      */
-    @Insert(onConflict = FAIL)
+    @Insert(onConflict = IGNORE)
     void insertDependency(Dependency dependency);
 
     /**
@@ -45,7 +45,7 @@ public interface DependencyDao {
      */
     @Query("SELECT COUNT(*)=0 FROM dependency WHERE work_spec_id=:id AND prerequisite_id IN "
             + "(SELECT id FROM workspec WHERE state!="
-            + EnumTypeConverters.StateIds.SUCCEEDED + ")")
+            + WorkTypeConverters.StateIds.SUCCEEDED + ")")
     boolean hasCompletedAllPrerequisites(String id);
 
     /**
