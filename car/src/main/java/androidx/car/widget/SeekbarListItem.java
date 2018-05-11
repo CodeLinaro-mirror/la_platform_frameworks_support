@@ -21,10 +21,6 @@ import static java.lang.annotation.RetentionPolicy.SOURCE;
 import android.car.drivingstate.CarUxRestrictions;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
-import androidx.annotation.DrawableRes;
-import androidx.annotation.IdRes;
-import androidx.annotation.IntDef;
-import androidx.annotation.Nullable;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
@@ -34,12 +30,15 @@ import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
+import androidx.annotation.DrawableRes;
+import androidx.annotation.IntDef;
+import androidx.annotation.Nullable;
+import androidx.car.R;
+import androidx.car.utils.CarUxRestrictionsUtils;
+
 import java.lang.annotation.Retention;
 import java.util.ArrayList;
 import java.util.List;
-
-import androidx.car.R;
-import androidx.car.utils.CarUxRestrictionsUtils;
 
 /**
  * Class to build a list item with {@link SeekBar}.
@@ -96,7 +95,6 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
     private final List<ViewBinder<ViewHolder>> mBinders = new ArrayList<>();
 
     @PrimaryActionType private int mPrimaryActionType = PRIMARY_ACTION_TYPE_NO_ICON;
-    private int mPrimaryActionIconResId;
     private Drawable mPrimaryActionIconDrawable;
 
     private String mText;
@@ -106,7 +104,7 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
     private SeekBar.OnSeekBarChangeListener mOnSeekBarChangeListener;
 
     @SupplementalActionType private int mSupplementalActionType = SUPPLEMENTAL_ACTION_NO_ACTION;
-    private int mSupplementalIconResId;
+    private Drawable mSupplementalIconDrawable;
     private View.OnClickListener mSupplementalIconOnClickListener;
     private boolean mShowSupplementalIconDivider;
 
@@ -142,7 +140,7 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
      * Used by {@link ListItemAdapter} to choose layout to inflate for view holder.
      */
     @Override
-    int getViewType() {
+    public int getViewType() {
         return ListItemAdapter.LIST_ITEM_TYPE_SEEKBAR;
     }
 
@@ -231,7 +229,19 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
                     // Start margin.
                     layoutParams.addRule(RelativeLayout.ALIGN_PARENT_START);
                     layoutParams.setMarginStart(startMargin);
-                    layoutParams.addRule(RelativeLayout.CENTER_VERTICAL);
+
+                    if (!TextUtils.isEmpty(mText)) {
+                        // Set icon top margin so that the icon remains in the same position it
+                        // would've been in for non-long-text item, namely so that the center
+                        // line of icon matches that of line item.
+                        int itemHeight = mContext.getResources().getDimensionPixelSize(
+                                R.dimen.car_double_line_list_item_height);
+                        layoutParams.removeRule(RelativeLayout.CENTER_VERTICAL);
+                        layoutParams.topMargin = (itemHeight - iconSize) / 2;
+                    } else {
+                        layoutParams.addRule(RelativeLayout.CENTER_VERTICAL);
+                        layoutParams.topMargin = 0;
+                    }
 
                     vh.getPrimaryIcon().requestLayout();
                 });
@@ -250,12 +260,7 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
             case PRIMARY_ACTION_TYPE_SMALL_ICON:
                 mBinders.add(vh -> {
                     vh.getPrimaryIcon().setVisibility(View.VISIBLE);
-
-                    if (mPrimaryActionIconDrawable != null) {
-                        vh.getPrimaryIcon().setImageDrawable(mPrimaryActionIconDrawable);
-                    } else if (mPrimaryActionIconResId != 0) {
-                        vh.getPrimaryIcon().setImageResource(mPrimaryActionIconResId);
-                    }
+                    vh.getPrimaryIcon().setImageDrawable(mPrimaryActionIconDrawable);
                 });
                 break;
             default:
@@ -405,7 +410,8 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
                         vh.getSupplementalIconDivider().setVisibility(View.VISIBLE);
                     }
 
-                    vh.getSupplementalIcon().setImageResource(mSupplementalIconResId);
+                    vh.getSupplementalIcon().setImageDrawable(mSupplementalIconDrawable);
+
                     vh.getSupplementalIcon().setOnClickListener(
                             mSupplementalIconOnClickListener);
                     vh.getSupplementalIcon().setClickable(
@@ -423,7 +429,7 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
      * @param iconResId the resource identifier of the drawable.
      */
     public void setPrimaryActionIcon(@DrawableRes int iconResId) {
-        setPrimaryActionIcon(null, iconResId);
+        setPrimaryActionIcon(mContext.getDrawable(iconResId));
     }
 
     /**
@@ -432,15 +438,8 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
      * @param drawable the Drawable to set, or null to clear the content.
      */
     public void setPrimaryActionIcon(Drawable drawable) {
-        setPrimaryActionIcon(drawable, 0);
-    }
-
-    private void setPrimaryActionIcon(Drawable drawable, @DrawableRes int iconResId) {
         mPrimaryActionType = PRIMARY_ACTION_TYPE_SMALL_ICON;
-
         mPrimaryActionIconDrawable = drawable;
-        mPrimaryActionIconResId = iconResId;
-
         markDirty();
     }
 
@@ -458,18 +457,34 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
     /**
      * Sets {@code Supplemental Action} to be represented by an {@code Supplemental Icon}.
      */
-    public void setSupplementalIcon(int iconResId, boolean showSupplementalIconDivider) {
-        setSupplementalIcon(iconResId, showSupplementalIconDivider, null);
+    public void setSupplementalIcon(@DrawableRes int iconResId,
+                                    boolean showSupplementalIconDivider) {
+        setSupplementalIcon(mContext.getDrawable(iconResId), showSupplementalIconDivider, null);
     }
 
     /**
      * Sets {@code Supplemental Action} to be represented by an {@code Supplemental Icon}.
      */
-    public void setSupplementalIcon(@IdRes int iconResId,
-            boolean showSupplementalIconDivider, @Nullable  View.OnClickListener listener) {
+    public void setSupplementalIcon(@DrawableRes int iconResId, boolean showSupplementalIconDivider,
+                                    @Nullable View.OnClickListener listener) {
+        setSupplementalIcon(mContext.getDrawable(iconResId), showSupplementalIconDivider, listener);
+    }
+
+    /**
+     * Sets {@code Supplemental Action} to be represented by an {@code Supplemental Icon}.
+     */
+    public void setSupplementalIcon(Drawable drawable, boolean showSupplementalIconDivider) {
+        setSupplementalIcon(drawable, showSupplementalIconDivider, null);
+    }
+
+    /**
+     * Sets {@code Supplemental Action} to be represented by an {@code Supplemental Icon}.
+     */
+    public void setSupplementalIcon(Drawable drawable, boolean showSupplementalIconDivider,
+                                    @Nullable  View.OnClickListener listener) {
         mSupplementalActionType = SUPPLEMENTAL_ACTION_SUPPLEMENTAL_ICON;
 
-        mSupplementalIconResId = iconResId;
+        mSupplementalIconDrawable = drawable;
         mShowSupplementalIconDivider = showSupplementalIconDivider;
         mSupplementalIconOnClickListener = listener;
 

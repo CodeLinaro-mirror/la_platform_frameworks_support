@@ -21,10 +21,9 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Rect;
 import android.os.Bundle;
-import androidx.annotation.Nullable;
-import androidx.annotation.StringRes;
 import android.text.TextUtils;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.TouchDelegate;
 import android.view.View;
@@ -33,6 +32,8 @@ import android.view.Window;
 import android.widget.Button;
 import android.widget.TextView;
 
+import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.car.R;
 
 /**
@@ -42,7 +43,12 @@ import androidx.car.R;
  * {@code AlertDialog}.
  */
 public class CarAlertDialog extends Dialog {
-    private final DialogData mData;
+    private final CharSequence mTitle;
+    private final CharSequence mBody;
+    private final CharSequence mPositiveButtonText;
+    private final OnClickListener mPositiveButtonListener;
+    private final CharSequence mNegativeButtonText;
+    private final OnClickListener mNegativeButtonListener;
 
     private final int mTopPadding;
     private final int mBottomPadding;
@@ -58,9 +64,15 @@ public class CarAlertDialog extends Dialog {
     private Button mNegativeButton;
     private ButtonPanelTouchDelegate mButtonPanelTouchDelegate;
 
-    private CarAlertDialog(Context context, DialogData data) {
+    private CarAlertDialog(Context context, Builder data) {
         super(context, getDialogTheme(context));
-        mData = data;
+
+        mTitle = data.mTitle;
+        mBody = data.mBody;
+        mPositiveButtonText = data.mPositiveButtonText;
+        mPositiveButtonListener = data.mPositiveButtonListener;
+        mNegativeButtonText = data.mNegativeButtonText;
+        mNegativeButtonListener = data.mNegativeButtonListener;
 
         Resources res = context.getResources();
         mTopPadding = res.getDimensionPixelSize(R.dimen.car_padding_4);
@@ -85,22 +97,35 @@ public class CarAlertDialog extends Dialog {
         getWindow().setContentView(R.layout.car_alert_dialog);
 
         initializeViews();
-        initializeDialogWithData();
+
+        setBody(mBody);
+        setPositiveButton(mPositiveButtonText);
+        setNegativeButton(mNegativeButtonText);
+        // setTitleInternal() should be called last because we want to center title and adjust
+        // padding depending on body/button configuration.
+        setTitleInternal(mTitle);
     }
 
     private void setTitleInternal(CharSequence title) {
         boolean hasTitle = !TextUtils.isEmpty(title);
+        boolean hasBody = mBodyView.getVisibility() == View.VISIBLE;
+        boolean hasButton = mButtonPanel.getVisibility() == View.VISIBLE;
 
         mTitleView.setText(title);
         mTitleView.setVisibility(hasTitle ? View.VISIBLE : View.GONE);
 
+        // Center title if there is no button.
+        mTitleView.setGravity(hasButton ? Gravity.CENTER_VERTICAL | Gravity.START : Gravity.CENTER);
+
         // If there's a title, then remove the padding at the top of the content view.
         int topPadding = hasTitle ? 0 : mTopPadding;
+        // If there is only title, also remove the padding at the bottom so title is centered.
+        int bottomPadding = !hasButton && !hasBody ? 0 : mContentView.getPaddingBottom();
         mContentView.setPaddingRelative(
                 mContentView.getPaddingStart(),
                 topPadding,
                 mContentView.getPaddingEnd(),
-                mContentView.getPaddingBottom());
+                bottomPadding);
     }
 
     private void setBody(CharSequence body) {
@@ -222,17 +247,6 @@ public class CarAlertDialog extends Dialog {
     }
 
     /**
-     * Looks through the {@link DialogData} that was passed to this dialog and initialize its
-     * contents based on what data is present.
-     */
-    private void initializeDialogWithData() {
-        setTitleInternal(mData.mTitle);
-        setBody(mData.mBody);
-        setPositiveButton(mData.mPositiveButtonText);
-        setNegativeButton(mData.mNegativeButtonText);
-    }
-
-    /**
      * Initializes the views within the dialog that are modifiable based on the data that has been
      * set on it. Also responsible for hooking up listeners for button clicks.
      */
@@ -256,8 +270,8 @@ public class CarAlertDialog extends Dialog {
 
     /** Delegates to a listener on the positive button if it exists or dismisses the dialog. */
     private void onPositiveButtonClick() {
-        if (mData.mPositiveButtonListener != null) {
-            mData.mPositiveButtonListener.onClick(this /* dialog */, BUTTON_POSITIVE);
+        if (mPositiveButtonListener != null) {
+            mPositiveButtonListener.onClick(/* dialog= */ this, BUTTON_POSITIVE);
         } else {
             dismiss();
         }
@@ -265,8 +279,8 @@ public class CarAlertDialog extends Dialog {
 
     /** Delegates to a listener on the negative button if it exists or dismisses the dialog. */
     private void onNegativeButtonClick() {
-        if (mData.mNegativeButtonListener != null) {
-            mData.mNegativeButtonListener.onClick(this /* dialog */, BUTTON_NEGATIVE);
+        if (mNegativeButtonListener != null) {
+            mNegativeButtonListener.onClick(/* dialog= */ this, BUTTON_NEGATIVE);
         } else {
             dismiss();
         }
@@ -284,11 +298,11 @@ public class CarAlertDialog extends Dialog {
             super(new Rect(), view);
         }
 
-        public void setPositiveButtonDelegate(@Nullable TouchDelegate delegate) {
+        void setPositiveButtonDelegate(@Nullable TouchDelegate delegate) {
             mPositiveButtonDelegate = delegate;
         }
 
-        public void setNegativeButtonDelegate(@Nullable TouchDelegate delegate) {
+        void setNegativeButtonDelegate(@Nullable TouchDelegate delegate) {
             mNegativeButtonDelegate = delegate;
         }
 
@@ -322,25 +336,18 @@ public class CarAlertDialog extends Dialog {
     }
 
     /**
-     * A class that holds the data that is settable by the {@link Builder} and should be displayed
-     * in the {@link CarAlertDialog}.
+     * Builder class that can be used to create a {@link CarAlertDialog} by configuring the options
+     * for what shows up in the resulting dialog.
      */
-    private static class DialogData {
+    public static final class Builder {
+        private final Context mContext;
+
         private CharSequence mTitle;
         private CharSequence mBody;
         private CharSequence mPositiveButtonText;
         private OnClickListener mPositiveButtonListener;
         private CharSequence mNegativeButtonText;
         private OnClickListener mNegativeButtonListener;
-    }
-
-    /**
-     * Builder class that can be used to create a {@link CarAlertDialog} by configuring the options
-     * for what shows up in the resulting dialog.
-     */
-    public static class Builder {
-        private final Context mContext;
-        private final DialogData mDialogData;
 
         private boolean mCancelable = true;
         private OnCancelListener mOnCancelListener;
@@ -353,7 +360,6 @@ public class CarAlertDialog extends Dialog {
          */
         public Builder(Context context) {
             mContext = context;
-            mDialogData = new DialogData();
         }
 
         /**
@@ -363,7 +369,7 @@ public class CarAlertDialog extends Dialog {
          * @return This {@code Builder} object to allow for chaining of calls.
          */
         public Builder setTitle(@StringRes int titleId) {
-            mDialogData.mTitle = mContext.getString(titleId);
+            mTitle = mContext.getString(titleId);
             return this;
         }
 
@@ -374,7 +380,7 @@ public class CarAlertDialog extends Dialog {
          * @return This {@code Builder} object to allow for chaining of calls.
          */
         public Builder setTitle(CharSequence title) {
-            mDialogData.mTitle = title;
+            mTitle = title;
             return this;
         }
 
@@ -385,7 +391,7 @@ public class CarAlertDialog extends Dialog {
          * @return This {@code Builder} object to allow for chaining of calls.
          */
         public Builder setBody(@StringRes int bodyId) {
-            mDialogData.mBody = mContext.getString(bodyId);
+            mBody = mContext.getString(bodyId);
             return this;
         }
 
@@ -396,7 +402,7 @@ public class CarAlertDialog extends Dialog {
          * @return This {@code Builder} object to allow for chaining of calls.
          */
         public Builder setBody(CharSequence body) {
-            mDialogData.mBody = body;
+            mBody = body;
             return this;
         }
 
@@ -409,14 +415,14 @@ public class CarAlertDialog extends Dialog {
          * an "OK" action).
          *
          * @param textId The resource id of the string to be used for the positive button text.
-         * @param listener A {@link OnClickListener} to be invoked when the button is clicked. Can
-         *                 be {@code null} to represent no listener.
+         * @param listener A {@link android.content.DialogInterface.OnClickListener} to be invoked
+         *                 when the button is clicked. Can be {@code null} to represent no listener.
          * @return This {@code Builder} object to allow for chaining of calls.
          */
         public Builder setPositiveButton(@StringRes int textId,
                 @Nullable OnClickListener listener) {
-            mDialogData.mPositiveButtonText = mContext.getString(textId);
-            mDialogData.mPositiveButtonListener = listener;
+            mPositiveButtonText = mContext.getString(textId);
+            mPositiveButtonListener = listener;
             return this;
         }
 
@@ -429,13 +435,13 @@ public class CarAlertDialog extends Dialog {
          * an "OK" action).
          *
          * @param text The string to be used for the positive button text.
-         * @param listener A {@link OnClickListener} to be invoked when the button is clicked. Can
-         *                 be {@code null} to represent no listener.
+         * @param listener A {@link android.content.DialogInterface.OnClickListener} to be invoked
+         *                 when the button is clicked. Can be {@code null} to represent no listener.
          * @return This {@code Builder} object to allow for chaining of calls.
          */
         public Builder setPositiveButton(CharSequence text, @Nullable OnClickListener listener) {
-            mDialogData.mPositiveButtonText = text;
-            mDialogData.mPositiveButtonListener = listener;
+            mPositiveButtonText = text;
+            mPositiveButtonListener = listener;
             return this;
         }
 
@@ -447,14 +453,14 @@ public class CarAlertDialog extends Dialog {
          * <p>The negative button should be used to cancel any actions the dialog represents.
          *
          * @param textId The resource id of the string to be used for the negative button text.
-         * @param listener A {@link OnClickListener} to be invoked when the button is clicked. Can
-         *                 be {@code null} to represent no listener.
+         * @param listener A {@link android.content.DialogInterface.OnClickListener} to be invoked
+         *                 when the button is clicked. Can be {@code null} to represent no listener.
          * @return This {@code Builder} object to allow for chaining of calls.
          */
         public Builder setNegativeButton(@StringRes int textId,
                 @Nullable OnClickListener listener) {
-            mDialogData.mNegativeButtonText = mContext.getString(textId);
-            mDialogData.mNegativeButtonListener = listener;
+            mNegativeButtonText = mContext.getString(textId);
+            mNegativeButtonListener = listener;
             return this;
         }
 
@@ -466,13 +472,13 @@ public class CarAlertDialog extends Dialog {
          * <p>The negative button should be used to cancel any actions the dialog represents.
          *
          * @param text The string to be used for the negative button text.
-         * @param listener A {@link OnClickListener} to be invoked when the button is clicked. Can
-         *                 be {@code null} to represent no listener.
+         * @param listener A {@link android.content.DialogInterface.OnClickListener} to be invoked
+         *                 when the button is clicked. Can be {@code null} to represent no listener.
          * @return This {@code Builder} object to allow for chaining of calls.
          */
         public Builder setNegativeButton(CharSequence text, @Nullable OnClickListener listener) {
-            mDialogData.mNegativeButtonText = text;
-            mDialogData.mNegativeButtonListener = listener;
+            mNegativeButtonText = text;
+            mNegativeButtonListener = listener;
             return this;
         }
 
@@ -518,33 +524,17 @@ public class CarAlertDialog extends Dialog {
         /**
          * Creates an {@link CarAlertDialog} with the arguments supplied to this {@code Builder}.
          *
-         * <p>Calling this method does not display the dialog. If no additional processing is
-         * needed, {@link #show()} may be called instead to both create and display the dialog.
+         * <p>Calling this method does not display the dialog. Utilize this dialog within a
+         * {@link androidx.fragment.app.DialogFragment} to show the dialog.
          */
         public CarAlertDialog create() {
-            CarAlertDialog dialog = new CarAlertDialog(mContext, mDialogData);
+            CarAlertDialog dialog = new CarAlertDialog(mContext, /* builder= */ this);
 
             dialog.setCancelable(mCancelable);
             dialog.setCanceledOnTouchOutside(mCancelable);
             dialog.setOnCancelListener(mOnCancelListener);
             dialog.setOnDismissListener(mOnDismissListener);
 
-            return dialog;
-        }
-
-        /**
-         * Creates an {@link CarAlertDialog} with the arguments supplied to this {@code Builder}
-         * and immediately displays the dialog.
-         *
-         * <p>Calling this method is functionally identical to:
-         * <pre>
-         *     CarAlertDialog dialog = new CarAlertDialog.Builder().create();
-         *     dialog.show();
-         * </pre>
-         */
-        public CarAlertDialog show() {
-            CarAlertDialog dialog = create();
-            dialog.show();
             return dialog;
         }
     }

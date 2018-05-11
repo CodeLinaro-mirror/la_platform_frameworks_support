@@ -34,7 +34,6 @@ buildscript {
 
     dependencies {
         classpath build_libs.gradle
-        classpath build_libs.lint
         classpath build_libs.jacoco
         classpath build_libs.kotlin.gradle_plugin
     }
@@ -52,7 +51,7 @@ init.setupRelease()
 
 apply from: 'buildSrc/jetify.gradle'
 
-init.enableDoclavaAndJDiff(this, new DacOptions("android/support", "SUPPORT_DATA"))
+init.enableDoclavaAndJDiff(this, new DacOptions("androidx", "ANDROIDX_DATA"))
 
 ///// FLATFOOT START
 

@@ -65,6 +65,20 @@ class SupportAndroidLibraryPlugin : Plugin<Project> {
 
             VersionFileWriterTask.setUpAndroidLibrary(project, library)
             DiffAndDocs.registerAndroidProject(project, library, supportLibraryExtension)
+
+            library.libraryVariants.all { libraryVariant ->
+                if (libraryVariant.getBuildType().getName().equals("debug")) {
+                    @Suppress("DEPRECATION")
+                    val javaCompile = libraryVariant.javaCompile
+                    if (supportLibraryExtension.failOnUncheckedWarnings) {
+                        javaCompile.options.compilerArgs.add("-Xlint:unchecked")
+                    }
+                    if (supportLibraryExtension.failOnDeprecationWarnings) {
+                        javaCompile.options.compilerArgs.add("-Xlint:deprecation")
+                    }
+                    javaCompile.options.compilerArgs.add("-Werror")
+                }
+            }
         }
 
         project.apply(mapOf("plugin" to "com.android.library"))
@@ -160,11 +174,9 @@ private fun setUpLint(lintOptions: LintOptions, baseline: File, verifyTranslatio
     lintOptions.isNoLines = false
     lintOptions.isQuiet = true
 
-    //lintOptions.fatal("NewApi")
+    lintOptions.fatal("NewApi")
     lintOptions.fatal("ObsoleteSdkInt")
-    lintOptions.disable("NewApi")
-    lintOptions.disable("MissingPermission")
-    lintOptions.disable("ResourceType")
+    lintOptions.fatal("VisibleForTests")
 
     if (verifyTranslations) {
         lintOptions.fatal("MissingTranslation")

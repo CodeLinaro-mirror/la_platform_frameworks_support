@@ -18,6 +18,8 @@ package androidx.car.widget;
 
 import static androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
+import static java.lang.annotation.RetentionPolicy.SOURCE;
+
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
@@ -49,6 +51,8 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.OrientationHelper;
 import androidx.recyclerview.widget.RecyclerView;
+
+import java.lang.annotation.Retention;
 
 /**
  * View that wraps a {@link RecyclerView} and a scroll bar that has
@@ -187,6 +191,7 @@ public class PagedListView extends FrameLayout {
             Gutter.END,
             Gutter.BOTH,
     })
+    @Retention(SOURCE)
     public @interface Gutter {
         /**
          * No gutter on either side of the list items. The items will span the full width of the
@@ -260,8 +265,13 @@ public class PagedListView extends FrameLayout {
         mSnapHelper = new PagedSnapHelper(context);
         mSnapHelper.attachToRecyclerView(mRecyclerView);
 
-        mRecyclerView.setOnScrollListener(mRecyclerViewOnScrollListener);
+        mRecyclerView.addOnScrollListener(mRecyclerViewOnScrollListener);
         mRecyclerView.getRecycledViewPool().setMaxRecycledViews(0, 12);
+
+        if (a.getBoolean(R.styleable.PagedListView_verticallyCenterListContent, false)) {
+            // Setting the height of wrap_content allows the RecyclerView to center itself.
+            mRecyclerView.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        }
 
         int defaultGutterSize = getResources().getDimensionPixelSize(R.dimen.car_margin);
         mGutterSize = a.getDimensionPixelSize(R.styleable.PagedListView_gutterSize,
@@ -349,6 +359,12 @@ public class PagedListView extends FrameLayout {
         Drawable downButtonIcon = a.getDrawable(R.styleable.PagedListView_downButtonIcon);
         if (downButtonIcon != null) {
             setDownButtonIcon(downButtonIcon);
+        }
+
+        // Using getResourceId() over getColor() because setScrollbarColor() expects a color resId.
+        int scrollBarColor = a.getResourceId(R.styleable.PagedListView_scrollBarColor, -1);
+        if (scrollBarColor != -1) {
+            setScrollbarColor(scrollBarColor);
         }
 
         mScrollBarView.setVisibility(mScrollBarEnabled ? VISIBLE : GONE);
@@ -849,6 +865,13 @@ public class PagedListView extends FrameLayout {
                 getOrientationHelper(mRecyclerView.getLayoutManager());
         int screenSize = mRecyclerView.getHeight();
         int scrollDistance = screenSize;
+
+        // If the last item is partially visible, page down should bring it to the top.
+        View lastChild = mRecyclerView.getChildAt(mRecyclerView.getChildCount() - 1);
+        if (mRecyclerView.getLayoutManager().isViewPartiallyVisible(lastChild,
+                /* completelyVisible= */ false, /* acceptEndPointInclusion= */ false)) {
+            scrollDistance = orientationHelper.getDecoratedStart(lastChild);
+        }
 
         // The iteration order matters. In case where there are 2 items longer than screen size, we
         // want to focus on upcoming view (the one at the bottom of screen).
@@ -1355,7 +1378,11 @@ public class PagedListView extends FrameLayout {
                     + (startRect.left - containerRect.left);
             int right = container.getRight()  - mDividerEndMargin
                     - (endRect.right - containerRect.right);
-            int bottom = container.getBottom() + spacing / 2 + mDividerHeight / 2;
+            // "(spacing + divider height) / 2" aligns the center of divider to that of spacing
+            // between two items.
+            // When spacing is an odd value (e.g. created by other decoration), space under divider
+            // is greater by 1dp.
+            int bottom = container.getBottom() + (spacing + mDividerHeight) / 2;
             int top = bottom - mDividerHeight;
 
             c.drawRect(left, top, right, bottom, mPaint);

@@ -27,12 +27,14 @@ fun JavaCompile.configureWithErrorProne(toolChain: ErrorProneToolChain) {
     val compilerArgs = this.options.compilerArgs
     compilerArgs += listOf(
             "-XDcompilePolicy=simple", // Workaround for b/36098770
+            "-XepExcludedPaths:.*/(build/generated|external)/.*",
 
             // Enforce the following checks.
             "-Xep:RestrictTo:OFF",
             "-Xep:ParameterNotNullable:ERROR",
             "-Xep:MissingOverride:ERROR",
             "-Xep:JdkObsolete:ERROR",
+            "-Xep:EqualsHashCode:ERROR",
             "-Xep:NarrowingCompoundAssignment:ERROR",
             "-Xep:ClassNewInstance:ERROR",
             "-Xep:ClassCanBeStatic:ERROR",
@@ -41,6 +43,8 @@ fun JavaCompile.configureWithErrorProne(toolChain: ErrorProneToolChain) {
             "-Xep:IntLongMath:ERROR",
             "-Xep:MissingFail:ERROR",
             "-Xep:JavaLangClash:ERROR",
+            "-Xep:PrivateConstructorForUtilityClass:ERROR",
+            "-Xep:TypeParameterUnusedInFormals:ERROR",
 
             // Nullaway
             "-XepIgnoreUnknownCheckNames", // https://github.com/uber/NullAway/issues/25

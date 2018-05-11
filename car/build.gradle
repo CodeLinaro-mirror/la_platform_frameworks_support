@@ -47,11 +47,12 @@ android {
 
 supportLibrary {
     name = "Android Car Support UI"
-    publish = false
+    publish = true
     mavenVersion = LibraryVersions.SUPPORT_LIBRARY
     mavenGroup = LibraryGroups.CAR
     inceptionYear = "2017"
     description = "Android Car Support UI"
     java8Library = true
     minSdkVersion = 24
+    failOnUncheckedWarnings = false
 }
