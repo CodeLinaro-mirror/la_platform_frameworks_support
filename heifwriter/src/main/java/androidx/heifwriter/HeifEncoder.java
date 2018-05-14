@@ -180,12 +180,27 @@ public final class HeifEncoder implements AutoCloseable,
             throw new IllegalArgumentException("invalid encoder inputs");
         }
 
+        // Disable grid if the image is too small
+        useGrid &= (width > GRID_WIDTH || height > GRID_HEIGHT);
+
         boolean useHeicEncoder = false;
+        MediaCodecInfo.CodecCapabilities caps = null;
         try {
             mEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_IMAGE_ANDROID_HEIC);
+            caps = mEncoder.getCodecInfo().getCapabilitiesForType(
+                    MediaFormat.MIMETYPE_IMAGE_ANDROID_HEIC);
+            // If the HEIC encoder can't support the size, fall back to HEVC encoder.
+            if (!caps.getVideoCapabilities().isSizeSupported(width, height)) {
+                mEncoder.release();
+                mEncoder = null;
+                throw new Exception();
+            }
             useHeicEncoder = true;
         } catch (Exception e) {
             mEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_HEVC);
+            caps = mEncoder.getCodecInfo().getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_HEVC);
+            // Always enable grid if the size is too large for the HEVC encoder
+            useGrid |= !caps.getVideoCapabilities().isSizeSupported(width, height);
         }
 
         mInputMode = inputMode;
@@ -207,13 +222,10 @@ public final class HeifEncoder implements AutoCloseable,
         int colorFormat = useSurfaceInternally ? CodecCapabilities.COLOR_FormatSurface :
                 CodecCapabilities.COLOR_FormatYUV420Flexible;
 
-        // TODO: determine how to set bitrate and framerate, or use constant quality
         mWidth = width;
         mHeight = height;
 
         int gridWidth, gridHeight, gridRows, gridCols;
-
-        useGrid = useGrid && (width > GRID_WIDTH || height > GRID_HEIGHT);
 
         if (useGrid) {
             gridWidth = GRID_WIDTH;
@@ -258,15 +270,11 @@ public final class HeifEncoder implements AutoCloseable,
 
         codecFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 0);
         codecFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat);
-
-        MediaCodecInfo.CodecCapabilities caps =
-                mEncoder.getCodecInfo().getCapabilitiesForType(useHeicEncoder
-                        ? MediaFormat.MIMETYPE_IMAGE_ANDROID_HEIC
-                        : MediaFormat.MIMETYPE_VIDEO_HEVC);
-        MediaCodecInfo.EncoderCapabilities encoderCaps = caps.getEncoderCapabilities();
-
         codecFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mNumTiles);
         codecFormat.setInteger(MediaFormat.KEY_CAPTURE_RATE, mNumTiles * 30);
+
+        MediaCodecInfo.EncoderCapabilities encoderCaps = caps.getEncoderCapabilities();
+
         if (encoderCaps.isBitrateModeSupported(
                 MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CQ)) {
             Log.d(TAG, "Setting bitrate mode to constant quality");
@@ -278,14 +286,14 @@ public final class HeifEncoder implements AutoCloseable,
                             (qualityRange.getUpper() - qualityRange.getLower()) * quality / 100.0));
         } else {
             if (encoderCaps.isBitrateModeSupported(
-                    MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)) {
-                Log.d(TAG, "Setting bitrate mode to variable bitrate");
-                codecFormat.setInteger(MediaFormat.KEY_BITRATE_MODE,
-                        MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
-            } else { // assume CBR
+                    MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)) {
                 Log.d(TAG, "Setting bitrate mode to constant bitrate");
                 codecFormat.setInteger(MediaFormat.KEY_BITRATE_MODE,
                         MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
+            } else { // assume VBR
+                Log.d(TAG, "Setting bitrate mode to variable bitrate");
+                codecFormat.setInteger(MediaFormat.KEY_BITRATE_MODE,
+                        MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
             }
             // Calculate the bitrate based on image dimension, max compression ratio and quality.
             // Note that we set the frame rate to the number of tiles, so the bitrate would be the

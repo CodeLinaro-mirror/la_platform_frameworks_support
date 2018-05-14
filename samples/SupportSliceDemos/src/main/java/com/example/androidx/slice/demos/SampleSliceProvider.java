@@ -143,7 +143,7 @@ public class SampleSliceProvider extends SliceProvider {
     private Slice createWeather(Uri sliceUri) {
         SliceAction primaryAction = new SliceAction(getBroadcastIntent(ACTION_TOAST,
                 "open weather app"),
-                IconCompat.createWithResource(getContext(), R.drawable.weather_1),
+                IconCompat.createWithResource(getContext(), R.drawable.weather_1), SMALL_IMAGE,
                 "Weather is happening!");
         return new ListBuilder(getContext(), sliceUri, INFINITY)
                 .addGridRow(gb -> gb
@@ -182,11 +182,17 @@ public class SampleSliceProvider extends SliceProvider {
     }
 
     private Slice createGallery(Uri sliceUri) {
+        SliceAction primaryAction = new SliceAction(
+                getBroadcastIntent(ACTION_TOAST, "open photo album"),
+                IconCompat.createWithResource(getContext(), R.drawable.slices_1),
+                LARGE_IMAGE,
+                "Open photo album");
         return new ListBuilder(getContext(), sliceUri, INFINITY)
                 .setColor(0xff4285F4)
                 .addRow(b -> b
                         .setTitle("Family trip to Hawaii")
-                        .setSubtitle("Sep 30, 2017 - Oct 2, 2017"))
+                        .setSubtitle("Sep 30, 2017 - Oct 2, 2017")
+                        .setPrimaryAction(primaryAction))
                 .addAction(new SliceAction(
                         getBroadcastIntent(ACTION_TOAST, "cast photo album"),
                         IconCompat.createWithResource(getContext(), R.drawable.ic_cast),
@@ -561,16 +567,18 @@ public class SampleSliceProvider extends SliceProvider {
     private Slice createStarRatingInputRange(Uri sliceUri) {
         IconCompat icon = IconCompat.createWithResource(getContext(), R.drawable.ic_star_on);
         SliceAction primaryAction =
-                new SliceAction(getBroadcastIntent(ACTION_TOAST, "open star rating"), icon, "Rate");
+                new SliceAction(getBroadcastIntent(ACTION_TOAST, "open star rating"),
+                        icon, "Rate");
         return new ListBuilder(getContext(), sliceUri, INFINITY)
                 .setColor(0xffff4081)
                 .addInputRange(c -> c
                         .setTitle("Star rating")
-                        .setSubtitle("Pick a rating from 0 to 5")
+                        .setSubtitle("Rate from 5 to 10 because it's weird")
+                        .setMin(5)
                         .setThumb(icon)
                         .setInputAction(getBroadcastIntent(ACTION_TOAST_RANGE_VALUE, null))
-                        .setMax(5)
-                        .setValue(3)
+                        .setMax(10)
+                        .setValue(8)
                         .setPrimaryAction(primaryAction)
                         .setContentDescription("Slider for star ratings"))
                 .build();

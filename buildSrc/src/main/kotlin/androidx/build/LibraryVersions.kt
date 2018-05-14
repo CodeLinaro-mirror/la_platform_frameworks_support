@@ -50,6 +50,8 @@ object LibraryVersions {
      */
     val PAGING = Version("2.0.0-alpha1")
 
+    val PAGING_RX = Version("1.0.0-alpha1")
+
     private val LIFECYCLES = Version("2.0.0-alpha1")
 
     /**
@@ -78,7 +80,17 @@ object LibraryVersions {
     val ARCH_CORE_TESTING = ARCH_CORE
 
     /**
+     * Version code for Navigation
+     */
+    val NAVIGATION = Version("1.0.0-alpha01")
+
+    /**
+     * Version code for WorkManager
+     */
+    val WORKMANAGER = Version("1.0.0-alpha01")
+
+    /**
      * Version code for Jetifier
      */
-    val JETIFIER = Version("0.0.1")
+    val JETIFIER = Version("1.0.0-alpha02")
 }

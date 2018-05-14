@@ -58,6 +58,21 @@ limitations under the License.
         <item name="android:textColor">@color/car_title2_light</item>
     </style>
 
+    <!-- The styling for subheader text. This text uses color accent. -->
+    <style name="TextAppearance.Car.Subheader" parent="TextAppearance.Car.Title2" >
+        <item name="android:textColor">@color/car_accent</item>
+    </style>
+
+    <!-- Subheader text that is permanently a dark color. -->
+    <style name="TextAppearance.Car.Subheader.Dark" parent="TextAppearance.Car.Subheader" >
+        <item name="android:textColor">@color/car_accent_dark</item>
+    </style>
+
+    <!-- Subheader text that is permanently a light color. -->
+    <style name="TextAppearance.Car.Subheader.Light" parent="TextAppearance.Car.Subheader" >
+        <item name="android:textColor">@color/car_accent_light</item>
+    </style>
+
     <!-- The styling for the main headline text. The color of this text changes based on the
          day/night mode. -->
     <style name="TextAppearance.Car.Headline1">
@@ -205,6 +220,7 @@ limitations under the License.
         <item name="android:paddingEnd">@dimen/car_borderless_button_horizontal_padding</item>
         <item name="android:textSize">@dimen/car_action1_size</item>
         <item name="android:textColor">@drawable/car_borderless_button_text_color</item>
+        <item name="android:background">@drawable/car_borderless_button_background</item>
     </style>
 
     <style name="Widget.Car.Button.Borderless.Colored.Light">
@@ -226,10 +242,22 @@ limitations under the License.
         <item name="android:textAppearance">@style/TextAppearance.Car.Body1</item>
     </style>
 
-    <!-- Style for the seek bars. -->
+    <!-- Styling for the seek bars. -->
     <style name="Widget.Car.SeekBar" parent="Widget.AppCompat.SeekBar">
         <item name="android:progressDrawable">@drawable/car_seekbar_track</item>
         <item name="android:thumb">@drawable/car_seekbar_thumb</item>
+    </style>
+
+    <!-- Styling for seek bars that is fixed to a dark color for thumb and progress. -->
+    <style name="Widget.Car.SeekBar.Dark">
+        <item name="android:progressDrawable">@drawable/car_seekbar_track_light</item>
+        <item name="android:thumb">@drawable/car_seekbar_thumb_dark</item>
+    </style>
+
+    <!-- Styling for seek bars that is fixed to a light color for thumb and progress. -->
+    <style name="Widget.Car.SeekBar.Light">
+        <item name="android:progressDrawable">@drawable/car_seekbar_track_dark</item>
+        <item name="android:thumb">@drawable/car_seekbar_thumb_light</item>
     </style>
 
     <style name="CarListVerticalDivider">
@@ -312,7 +340,6 @@ limitations under the License.
         <item name="android:maxLines">1</item>
         <item name="android:textAppearance">@style/TextAppearance.Car.Title2</item>
         <item name="android:ellipsize">end</item>
-        <item name="android:textAlignment">viewStart</item>
     </style>
 
     <!-- Title text for a dialog that is fixed in a light color. -->

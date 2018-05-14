@@ -451,15 +451,20 @@ public class SliceMetadataTest {
         ListBuilder lb = new ListBuilder(mContext, uri, ListBuilder.INFINITY);
         lb.addInputRange(new ListBuilder.InputRangeBuilder(lb)
                 .setTitle("another title")
-                .setValue(5)
+                .setValue(7)
+                .setMin(5)
                 .setMax(10)
-                .setAction(pi));
+                .setInputAction(pi));
 
         Slice sliderSlice = lb.build();
         SliceMetadata sliderInfo = SliceMetadata.from(mContext, sliderSlice);
+
         Pair<Integer, Integer> values = sliderInfo.getRange();
         assertEquals(5, (int) values.first);
         assertEquals(10, (int) values.second);
+
+        int currentValue = sliderInfo.getRangeValue();
+        assertEquals(7, currentValue);
     }
 
     @Test
@@ -475,9 +480,8 @@ public class SliceMetadataTest {
         Slice sliderSlice = lb.build();
         SliceMetadata progressInfo = SliceMetadata.from(mContext, sliderSlice);
         Pair<Integer, Integer> values = progressInfo.getRange();
-        assertEquals(5, (int) values.first);
+        assertEquals(0, (int) values.first);
         assertEquals(10, (int) values.second);
-
     }
 
     @Test
@@ -586,6 +590,16 @@ public class SliceMetadataTest {
         SliceMetadata si2 = SliceMetadata.from(mContext, noTtlSlice);
         long retrievedLastUpdated2 = si2.getLastUpdatedTime();
         assertEquals(0, retrievedLastUpdated2);
+    }
+
+    @Test
+    public void testIsPermissionSlice() {
+        Uri uri = Uri.parse("content://pkg/slice");
+        Slice permissionSlice =
+                SliceProvider.createPermissionSlice(mContext, uri, mContext.getPackageName());
+
+        SliceMetadata metadata = SliceMetadata.from(mContext, permissionSlice);
+        assertEquals(true, metadata.isPermissionSlice());
     }
 
     private PendingIntent getIntent(String action) {
