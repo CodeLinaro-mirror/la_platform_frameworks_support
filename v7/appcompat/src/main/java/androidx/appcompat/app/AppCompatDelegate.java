@@ -29,7 +29,6 @@ import android.util.Log;
 import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
 
 import androidx.annotation.IdRes;
 import androidx.annotation.IntDef;
@@ -39,6 +38,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RestrictTo;
 import androidx.appcompat.view.ActionMode;
 import androidx.appcompat.widget.Toolbar;
+import androidx.appcompat.widget.VectorEnabledTintResources;
 import androidx.core.view.WindowCompat;
 import androidx.fragment.app.FragmentActivity;
 
@@ -129,8 +129,6 @@ public abstract class AppCompatDelegate {
     @NightMode
     private static int sDefaultNightMode = MODE_NIGHT_FOLLOW_SYSTEM;
 
-    private static boolean sCompatVectorFromResourcesEnabled = false;
-
     /** @hide */
     @RestrictTo(LIBRARY_GROUP)
     @IntDef({MODE_NIGHT_NO, MODE_NIGHT_YES, MODE_NIGHT_AUTO, MODE_NIGHT_FOLLOW_SYSTEM,
@@ -181,7 +179,7 @@ public abstract class AppCompatDelegate {
      * @param callback An optional callback for AppCompat specific events
      */
     public static AppCompatDelegate create(Activity activity, AppCompatCallback callback) {
-        return create(activity, activity.getWindow(), callback);
+        return new AppCompatDelegateImpl(activity, activity.getWindow(), callback);
     }
 
     /**
@@ -190,18 +188,7 @@ public abstract class AppCompatDelegate {
      * @param callback An optional callback for AppCompat specific events
      */
     public static AppCompatDelegate create(Dialog dialog, AppCompatCallback callback) {
-        return create(dialog.getContext(), dialog.getWindow(), callback);
-    }
-
-    private static AppCompatDelegate create(Context context, Window window,
-            AppCompatCallback callback) {
-        if (Build.VERSION.SDK_INT >= 24) {
-            return new AppCompatDelegateImplN(context, window, callback);
-        } else if (Build.VERSION.SDK_INT >= 23) {
-            return new AppCompatDelegateImplV23(context, window, callback);
-        } else {
-            return new AppCompatDelegateImplBase(context, window, callback);
-        }
+        return new AppCompatDelegateImpl(dialog.getContext(), dialog.getWindow(), callback);
     }
 
     /**
@@ -522,7 +509,7 @@ public abstract class AppCompatDelegate {
      * <p>Please note: this only takes effect in Activities created after this call.</p>
      */
     public static void setCompatVectorFromResourcesEnabled(boolean enabled) {
-        sCompatVectorFromResourcesEnabled = enabled;
+        VectorEnabledTintResources.setCompatVectorFromResourcesEnabled(enabled);
     }
 
     /**
@@ -532,6 +519,6 @@ public abstract class AppCompatDelegate {
      * @see #setCompatVectorFromResourcesEnabled(boolean)
      */
     public static boolean isCompatVectorFromResourcesEnabled() {
-        return sCompatVectorFromResourcesEnabled;
+        return VectorEnabledTintResources.isCompatVectorFromResourcesEnabled();
     }
 }
