@@ -27,6 +27,8 @@ import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.attribute.FileTime
+import java.time.Instant
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -99,9 +101,10 @@ class Archive(
         val out = ZipOutputStream(outputStream)
 
         for (file in files) {
-            Log.d(TAG, "Writing file: %s", file.relativePath)
+            Log.v(TAG, "Writing file: %s", file.relativePath)
 
             val entry = ZipEntry(file.relativePath.toString())
+            entry.lastModifiedTime = FileTime.from(Instant.now()) // b/78249473
             out.putNextEntry(entry)
             file.writeSelfTo(out)
             out.closeEntry()
@@ -156,7 +159,7 @@ class Archive(
 
         @Throws(IOException::class)
         private fun extractFile(zipIn: ZipInputStream, relativePath: Path): ArchiveFile {
-            Log.d(TAG, "Extracting archive: %s", relativePath)
+            Log.v(TAG, "Extracting archive: %s", relativePath)
 
             val data = zipIn.readBytes()
             return ArchiveFile(relativePath, data)

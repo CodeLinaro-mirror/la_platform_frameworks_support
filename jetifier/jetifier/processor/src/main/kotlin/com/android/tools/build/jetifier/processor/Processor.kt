@@ -17,6 +17,7 @@
 package com.android.tools.build.jetifier.processor
 
 import com.android.tools.build.jetifier.core.config.Config
+import com.android.tools.build.jetifier.core.pom.DependencyVersionsMap
 import com.android.tools.build.jetifier.core.pom.PomDependency
 import com.android.tools.build.jetifier.core.utils.Log
 import com.android.tools.build.jetifier.processor.archive.Archive
@@ -81,12 +82,15 @@ class Processor private constructor(
          * @param config Transformation configuration
          * @param reversedMode Whether the processor should run in reversed mode
          * @param rewritingSupportLib Whether we are rewriting the support library itself
+         * @param useFallbackIfTypeIsMissing Use fallback for types resolving instead of crashing
+         * @param versionsMap Versions map for dependencies rewriting
          */
         fun createProcessor(
             config: Config,
             reversedMode: Boolean = false,
             rewritingSupportLib: Boolean = false,
-            useIdentityIfTypeIsMissing: Boolean = true
+            useFallbackIfTypeIsMissing: Boolean = true,
+            versionsMap: DependencyVersionsMap = DependencyVersionsMap.LATEST_RELEASED
         ): Processor {
             var newConfig = config
 
@@ -97,7 +101,7 @@ class Processor private constructor(
                     slRules = config.slRules,
                     pomRewriteRules = config.pomRewriteRules.map { it.getReversed() }.toSet(),
                     typesMap = config.typesMap.reverseMapOrDie(),
-                    proGuardMap = config.proGuardMap.reverseMapOrDie(),
+                    proGuardMap = config.proGuardMap.reverseMap(),
                     packageMap = config.packageMap.reverse()
                 )
             }
@@ -106,7 +110,8 @@ class Processor private constructor(
                 config = newConfig,
                 rewritingSupportLib = rewritingSupportLib,
                 isInReversedMode = reversedMode,
-                useFallbackIfTypeIsMissing = useIdentityIfTypeIsMissing)
+                useFallbackIfTypeIsMissing = useFallbackIfTypeIsMissing,
+                versionsMap = versionsMap)
             val transformers = if (rewritingSupportLib) {
                 createSLTransformers(context)
             } else {
@@ -148,6 +153,14 @@ class Processor private constructor(
         libraries.forEach { transformLibrary(it) }
 
         if (context.errorsTotal() > 0) {
+            if (context.isInReversedMode && context.rewritingSupportLib) {
+                throw IllegalArgumentException("There were ${context.errorsTotal()} errors found " +
+                    "during the de-jetification. You have probably added new androidx types " +
+                    "into support library and dejetifier doesn't know where to move them. " +
+                    "Please update default.config and regenerate default.generated.config via" +
+                    "jetifier/jetifier/preprocessor/scripts/processDefaultConfig.sh")
+            }
+
             throw IllegalArgumentException("There were ${context.errorsTotal()}" +
                 " errors found during the remapping. Check the logs for more details.")
         }
@@ -187,7 +200,7 @@ class Processor private constructor(
      * removed without replacement. Returns null in case a mapping was not found which means that
      * the given artifact was unknown.
      */
-    fun mapDependency(depNotation: String): Set<String>? {
+    fun mapDependency(depNotation: String): String? {
         val parts = depNotation.split(":")
         val inputDependency = PomDependency(
             groupId = parts[0],
@@ -198,9 +211,13 @@ class Processor private constructor(
         val resultRule = context.config.pomRewriteRules
             .firstOrNull { it.matches(inputDependency) } ?: return null
 
-        return resultRule.to
-            .map { it.toStringNotation() }
-            .toSet()
+        if (resultRule.to.isEmpty()) {
+            return null
+        }
+
+        return resultRule.to.single()
+            .rewrite(inputDependency, context.versionsMap)
+            .toStringNotation()
     }
 
     private fun loadLibraries(inputLibraries: Iterable<FileMapping>): List<Archive> {
@@ -240,7 +257,6 @@ class Processor private constructor(
         Log.i(TAG, "Started new transformation")
         Log.i(TAG, "- Input file: %s", archive.relativePath)
 
-        context.libraryName = archive.fileName
         archive.accept(this)
     }
 
@@ -252,11 +268,11 @@ class Processor private constructor(
         val transformer = transformers.firstOrNull { it.canTransform(archiveFile) }
 
         if (transformer == null) {
-            Log.d(TAG, "[Skipped] %s", archiveFile.relativePath)
+            Log.v(TAG, "[Skipped] %s", archiveFile.relativePath)
             return
         }
 
-        Log.d(TAG, "[Applied: %s] %s", transformer.javaClass.simpleName, archiveFile.relativePath)
+        Log.v(TAG, "[Applied: %s] %s", transformer.javaClass.simpleName, archiveFile.relativePath)
         transformer.runTransform(archiveFile)
     }
 }

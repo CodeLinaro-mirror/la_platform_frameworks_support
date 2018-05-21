@@ -27,7 +27,7 @@ import androidx.car.widget.ListItemAdapter;
 import androidx.car.widget.ListItemProvider;
 import androidx.car.widget.PagedListView;
 import androidx.car.widget.SeekbarListItem;
-import androidx.car.widget.TextListItem;
+import androidx.car.widget.SubheaderListItem;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,13 +81,12 @@ public class SeekbarListItemActivity extends Activity {
 
             String longText = mContext.getString(R.string.long_text);
 
-            TextListItem textListItem;
+            SubheaderListItem subheaderItem;
             SeekbarListItem item;
 
             // Slider only.
-            textListItem = new TextListItem(mContext);
-            textListItem.setTitle("Slider Only");
-            mItems.add(textListItem);
+            subheaderItem = new SubheaderListItem(mContext, "Slider Only");
+            mItems.add(subheaderItem);
 
             item = new SeekbarListItem(mContext, 100, 0, mListener, null);
             mItems.add(item);
@@ -100,9 +99,8 @@ public class SeekbarListItemActivity extends Activity {
 
 
             // Start icon.
-            textListItem = new TextListItem(mContext);
-            textListItem.setTitle("With Primary Action");
-            mItems.add(textListItem);
+            subheaderItem = new SubheaderListItem(mContext, "With Primary Action");
+            mItems.add(subheaderItem);
             // Only slider. No text.
             item = new SeekbarListItem(mContext, 100, 0, mListener, null);
             item.setPrimaryActionIcon(android.R.drawable.sym_def_app_icon);
@@ -119,10 +117,9 @@ public class SeekbarListItemActivity extends Activity {
             mItems.add(item);
 
             // End icon with divider.
-            textListItem = new TextListItem(mContext);
-            textListItem.setTitle(
-                    "With Supplemental Action");
-            mItems.add(textListItem);
+            subheaderItem = new SubheaderListItem(mContext, "With Supplemental Action");
+            mItems.add(subheaderItem);
+
             item = new SeekbarListItem(mContext, 100, 0, mListener, null);
             item.setSupplementalIcon(android.R.drawable.sym_def_app_icon, true);
             mItems.add(item);
@@ -135,10 +132,16 @@ public class SeekbarListItemActivity extends Activity {
             item.setSupplementalIcon(android.R.drawable.sym_def_app_icon, true);
             mItems.add(item);
 
+            item = new SeekbarListItem(mContext, 100, 0, mListener, "with clickable icon");
+            item.setSupplementalIcon(android.R.drawable.sym_def_app_icon, true,
+                    v -> Toast.makeText(mContext, "Supplemental icon clicked!", Toast.LENGTH_SHORT)
+                            .show());
+            mItems.add(item);
+
             // Empty end icon with divider.
-            textListItem = new TextListItem(mContext);
-            textListItem.setTitle("With Empty Icon");
-            mItems.add(textListItem);
+            subheaderItem = new SubheaderListItem(mContext, "With Empty Icon");
+            mItems.add(subheaderItem);
+
             item = new SeekbarListItem(mContext, 100, 0, mListener, null);
             item.setSupplementalEmptyIcon(true);
             mItems.add(item);
@@ -152,10 +155,9 @@ public class SeekbarListItemActivity extends Activity {
             mItems.add(item);
 
             // End icon without divider.
-            textListItem = new TextListItem(mContext);
-            textListItem.setTitle(
-                    "Without Supplemental Action Divider");
-            mItems.add(textListItem);
+            subheaderItem = new SubheaderListItem(mContext, "Without Supplemental Action Divider");
+            mItems.add(subheaderItem);
+
             item = new SeekbarListItem(mContext, 100, 0, mListener, null);
             item.setSupplementalIcon(android.R.drawable.sym_def_app_icon, false);
             mItems.add(item);
@@ -169,10 +171,9 @@ public class SeekbarListItemActivity extends Activity {
             mItems.add(item);
 
             // Empty end icon without divider.
-            textListItem = new TextListItem(mContext);
-            textListItem.setTitle(
-                    "With Empty Icon No Divider");
-            mItems.add(textListItem);
+            subheaderItem = new SubheaderListItem(mContext, "With Empty Icon No Divider");
+            mItems.add(subheaderItem);
+
             item = new SeekbarListItem(mContext, 100, 0, mListener, null);
             item.setSupplementalEmptyIcon(false);
             mItems.add(item);
@@ -183,6 +184,26 @@ public class SeekbarListItemActivity extends Activity {
 
             item = new SeekbarListItem(mContext, 100, 0, mListener, longText);
             item.setSupplementalEmptyIcon(false);
+            mItems.add(item);
+
+            // Secondary progress.
+            subheaderItem = new SubheaderListItem(mContext, "Secondary Progress");
+            mItems.add(subheaderItem);
+
+            item = new SeekbarListItem(mContext, 100, 0, new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    seekBar.setSecondaryProgress(progress + 10);
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {
+                }
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {
+                }
+            }, null);
             mItems.add(item);
 
             mListProvider = new ListItemProvider.ListProvider(mItems);

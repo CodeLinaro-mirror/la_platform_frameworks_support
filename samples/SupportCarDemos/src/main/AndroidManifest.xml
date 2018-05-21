@@ -22,7 +22,8 @@
             android:icon="@drawable/app_sample_code"
             android:theme="@style/CarTheme">
 
-        <activity android:name=".SupportCarDemoActivity">
+        <activity android:name=".SupportCarDemoActivity"
+            android:theme="@style/CarListTheme" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -31,6 +32,17 @@
 
         <activity android:name=".PagedListViewActivity"
                   android:label="PagedListView"
+                  android:parentActivityName=".SupportCarDemoActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SAMPLE_CODE" />
+            </intent-filter>
+            <meta-data android:name="android.support.PARENT_ACTIVITY"
+                       android:value=".SupportCarDemoActivity" />
+        </activity>
+
+        <activity android:name=".VerticallyCenteredListDemo"
+                  android:label="VerticallyCenteredListDemo"
                   android:parentActivityName=".SupportCarDemoActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -127,6 +139,17 @@
             </intent-filter>
             <meta-data android:name="android.support.PARENT_ACTIVITY"
                        android:value=".SupportCarDemoActivity" />
+        </activity>
+
+        <activity android:name=".AppBarActivity"
+            android:label="App Bar"
+            android:parentActivityName=".SupportCarDemoActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SAMPLE_CODE" />
+            </intent-filter>
+            <meta-data android:name="android.support.PARENT_ACTIVITY"
+                android:value=".SupportCarDemoActivity" />
         </activity>
     </application>
 </manifest>

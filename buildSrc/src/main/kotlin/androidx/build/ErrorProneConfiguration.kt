@@ -34,6 +34,7 @@ fun JavaCompile.configureWithErrorProne(toolChain: ErrorProneToolChain) {
             "-Xep:ParameterNotNullable:ERROR",
             "-Xep:MissingOverride:ERROR",
             "-Xep:JdkObsolete:ERROR",
+            "-Xep:EqualsHashCode:ERROR",
             "-Xep:NarrowingCompoundAssignment:ERROR",
             "-Xep:ClassNewInstance:ERROR",
             "-Xep:ClassCanBeStatic:ERROR",
@@ -44,6 +45,8 @@ fun JavaCompile.configureWithErrorProne(toolChain: ErrorProneToolChain) {
             "-Xep:JavaLangClash:ERROR",
             "-Xep:PrivateConstructorForUtilityClass:ERROR",
             "-Xep:TypeParameterUnusedInFormals:ERROR",
+            "-Xep:StringSplitter:ERROR",
+            "-Xep:ReferenceEquality:ERROR",
 
             // Nullaway
             "-XepIgnoreUnknownCheckNames", // https://github.com/uber/NullAway/issues/25

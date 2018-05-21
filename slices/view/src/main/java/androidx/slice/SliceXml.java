@@ -30,6 +30,7 @@ import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
+import android.os.Build;
 import android.text.Html;
 import android.text.Spanned;
 import android.text.TextUtils;
@@ -120,7 +121,7 @@ class SliceXml {
         return b.build();
     }
 
-    @SuppressLint("WrongConstant")
+    @SuppressLint("DefaultCharset")
     private static void parseItem(Context context, Slice.Builder b,
             XmlPullParser parser, final SliceUtils.SliceActionListener listener)
             throws IOException, XmlPullParserException, SliceUtils.SliceParseException {
@@ -132,7 +133,7 @@ class SliceXml {
         String iconType = parser.getAttributeValue(NAMESPACE, ATTR_ICON_TYPE);
         String pkg = parser.getAttributeValue(NAMESPACE, ATTR_ICON_PACKAGE);
         String resType = parser.getAttributeValue(NAMESPACE, ATTR_ICON_RES_TYPE);
-        String[] hints = hints(hintStr);
+        @Slice.SliceHint String[] hints = hints(hintStr);
         String v;
         while ((type = parser.next()) != XmlPullParser.END_DOCUMENT
                 && (type != XmlPullParser.END_TAG || parser.getDepth() > outerDepth)) {
@@ -181,6 +182,10 @@ class SliceXml {
                         break;
                     case android.app.slice.SliceItem.FORMAT_TEXT:
                         v = parser.getText();
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+                            // 19-21 don't allow special characters in XML, so we base64 encode it.
+                            v = new String(Base64.decode(v, Base64.NO_WRAP));
+                        }
                         b.addText(Html.fromHtml(v), subtype, hints);
                         break;
                     case android.app.slice.SliceItem.FORMAT_LONG:
@@ -203,6 +208,7 @@ class SliceXml {
         }
     }
 
+    @Slice.SliceHint
     private static String[] hints(String hintStr) {
         return TextUtils.isEmpty(hintStr) ? new String[0] : hintStr.split(",");
     }
@@ -240,6 +246,7 @@ class SliceXml {
         serializer.endTag(NAMESPACE, isAction ? TAG_ACTION : TAG_SLICE);
     }
 
+    @SuppressWarnings("DefaultCharset")
     private static void serialize(SliceItem item, Context context,
             SliceUtils.SerializeOptions options, XmlSerializer serializer) throws IOException {
         String format = item.getFormat();
@@ -298,9 +305,19 @@ class SliceXml {
                 break;
             case android.app.slice.SliceItem.FORMAT_TEXT:
                 if (item.getText() instanceof Spanned) {
-                    serializer.text(Html.toHtml((Spanned) item.getText()));
+                    String text = Html.toHtml((Spanned) item.getText());
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+                        // 19-21 don't allow special characters in XML, so we base64 encode it.
+                        text = Base64.encodeToString(text.getBytes(), Base64.NO_WRAP);
+                    }
+                    serializer.text(text);
                 } else {
-                    serializer.text(String.valueOf(item.getText()));
+                    String text = String.valueOf(item.getText());
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+                        // 19-21 don't allow special characters in XML, so we base64 encode it.
+                        text = Base64.encodeToString(text.getBytes(), Base64.NO_WRAP);
+                    }
+                    serializer.text(text);
                 }
                 break;
             case android.app.slice.SliceItem.FORMAT_LONG:
@@ -333,6 +350,7 @@ class SliceXml {
         serializer.text(icon.getUri().toString());
     }
 
+    @SuppressWarnings("DefaultCharset")
     private static void serializeIcon(XmlSerializer serializer, IconCompat icon,
             Context context, SliceUtils.SerializeOptions options) throws IOException {
         Drawable d = icon.loadDrawable(context);

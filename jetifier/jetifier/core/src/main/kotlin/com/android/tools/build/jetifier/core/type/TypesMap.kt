@@ -16,7 +16,10 @@
 
 package com.android.tools.build.jetifier.core.type
 
+import com.android.tools.build.jetifier.core.proguard.ProGuardType
 import com.android.tools.build.jetifier.core.utils.Log
+import java.util.SortedMap
+import java.util.regex.Pattern
 
 /**
  * Contains all the mappings needed to rewrite java types.
@@ -43,7 +46,7 @@ data class TypesMap(private val types: Map<JavaType, JavaType>) {
 
     /** Returns JSON data model of this class */
     fun toJson(): JsonData {
-        return JsonData(types.map { it.key.fullName to it.value.fullName }.toMap())
+        return JsonData(types.map { it.key.fullName to it.value.fullName }.toMap().toSortedMap())
     }
 
     /**
@@ -93,9 +96,51 @@ data class TypesMap(private val types: Map<JavaType, JavaType>) {
     }
 
     /**
+     * Finds all original types matched by the given ProGuard selector and returns their new types.
+     *
+     * Example:
+     * ProGuard: test.*
+     * Types: test.Hello => test2.Hello, other.World => other2.World
+     * Returns: test2.Hello
+     */
+    fun matchOldProguardForNewTypes(proGuardSelector: ProGuardType): Set<JavaType> {
+        var selector = proGuardSelector.value.replace("?", "[^/]")
+        selector = selector.replace("*", "@")
+        selector = selector.replace("@@@", ".*")
+        selector = selector.replace("@@", ".*")
+        selector = selector.replace("@", "[^/]*")
+        val pattern = Pattern.compile(selector)
+
+        val foundMatches = mutableSetOf<JavaType>()
+
+        types.forEach {
+            if (pattern.matcher(it.key.fullName).matches()) {
+                foundMatches.add(it.value)
+            }
+        }
+
+        return foundMatches
+    }
+
+    /**
+     * Finds all the types starting with the given prefix.
+     */
+    fun findAllTypesPrefixedWith(prefix: String): Set<JavaType> {
+        val foundMatches = mutableSetOf<JavaType>()
+
+        types.forEach {
+            if (it.value.fullName.startsWith(prefix)) {
+                foundMatches.add(it.value)
+            }
+        }
+
+        return foundMatches
+    }
+
+    /**
      * JSON data model for [TypesMap].
      */
-    data class JsonData(val types: Map<String, String>) {
+    data class JsonData(val types: SortedMap<String, String>) {
 
         /** Creates instance of [TypesMap] */
         fun toMappings(): TypesMap {
