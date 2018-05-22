@@ -107,8 +107,6 @@ class SupportAndroidLibraryPlugin : Plugin<Project> {
                 // the classpath. We do not do this for non-"core" projects as they need to
                 // depend on the Maven coordinate variant.
                 configuration.resolutionStrategy.dependencySubstitution.apply {
-                    substitute(module("com.android.support:support-annotations"))
-                            .with(project(":annotation"))
                     substitute(module("androidx.annotation:annotation"))
                             .with(project(":annotation"))
                 }
@@ -146,9 +144,8 @@ class SupportAndroidLibraryPlugin : Plugin<Project> {
 
         val toolChain = ErrorProneToolChain.create(project)
         project.dependencies.add("errorprone", ERROR_PRONE_VERSION)
-        library.buildTypes.create("errorProne")
         library.libraryVariants.all { libraryVariant ->
-            if (libraryVariant.getBuildType().getName().equals("errorProne")) {
+            if (libraryVariant.getBuildType().getName().equals("debug")) {
                 @Suppress("DEPRECATION")
                 libraryVariant.javaCompile.configureWithErrorProne(toolChain)
             }
