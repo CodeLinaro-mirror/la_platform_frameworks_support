@@ -30,15 +30,15 @@ import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-import java.lang.annotation.Retention;
-import java.util.ArrayList;
-import java.util.List;
-
 import androidx.annotation.DrawableRes;
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.car.R;
 import androidx.car.utils.CarUxRestrictionsUtils;
+
+import java.lang.annotation.Retention;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Class to build a list item with {@link SeekBar}.
@@ -66,6 +66,8 @@ import androidx.car.utils.CarUxRestrictionsUtils;
  *
  * <p>When conflicting methods are called (e.g. setting primary action to both primary icon and
  * no icon), the last called method wins.
+ *
+ * {@code minimum value} is set to 0.
  */
 public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
 
@@ -96,11 +98,13 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
 
     @PrimaryActionType private int mPrimaryActionType = PRIMARY_ACTION_TYPE_NO_ICON;
     private Drawable mPrimaryActionIconDrawable;
+    private View.OnClickListener mPrimaryActionIconOnClickListener;
 
     private String mText;
 
-    private int mProgress;
     private int mMax;
+    private int mProgress;
+    private int mSecondaryProgress;
     private SeekBar.OnSeekBarChangeListener mOnSeekBarChangeListener;
 
     @SupplementalActionType private int mSupplementalActionType = SUPPLEMENTAL_ACTION_NO_ACTION;
@@ -115,24 +119,8 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
         return new ViewHolder(itemView);
     }
 
-    /**
-     * Creates a SeekbarListItem.
-     *
-     * @param context context
-     * @param max the upper range of the SeekBar.
-     * @param progress the current progress of the specified value.
-     * @param listener listener to receive notification of changes to progress level.
-     * @param text displays a text on top of the SeekBar.
-     */
-    public SeekbarListItem(Context context, int max, int progress,
-            SeekBar.OnSeekBarChangeListener listener, String text) {
+    public SeekbarListItem(Context context) {
         mContext = context;
-
-        mMax = max;
-        mProgress = progress;
-        mOnSeekBarChangeListener = listener;
-        mText = text;
-
         markDirty();
     }
 
@@ -142,6 +130,46 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
     @Override
     public int getViewType() {
         return ListItemAdapter.LIST_ITEM_TYPE_SEEKBAR;
+    }
+
+    /**
+     * Sets max value of seekbar.
+     */
+    public void setMax(int max) {
+        mMax = max;
+        markDirty();
+    }
+
+    /**
+     * Sets progress of seekbar.
+     */
+    public void setProgress(int progress) {
+        mProgress = progress;
+        markDirty();
+    }
+
+    /**
+     * Sets secondary progress of seekbar.
+     */
+    public void setSecondaryProgress(int secondaryProgress) {
+        mSecondaryProgress = secondaryProgress;
+        markDirty();
+    }
+
+    /**
+     * Sets {@link SeekBar.OnSeekBarChangeListener}.
+     */
+    public void setOnSeekBarChangeListener(SeekBar.OnSeekBarChangeListener listener) {
+        mOnSeekBarChangeListener = listener;
+        markDirty();
+    }
+
+    /**
+     * Sets text that sits on top of seekbar.
+     */
+    public void setText(String text) {
+        mText = text;
+        markDirty();
     }
 
     /**
@@ -229,7 +257,19 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
                     // Start margin.
                     layoutParams.addRule(RelativeLayout.ALIGN_PARENT_START);
                     layoutParams.setMarginStart(startMargin);
-                    layoutParams.addRule(RelativeLayout.CENTER_VERTICAL);
+
+                    if (!TextUtils.isEmpty(mText)) {
+                        // Set icon top margin so that the icon remains in the same position it
+                        // would've been in for non-long-text item, namely so that the center
+                        // line of icon matches that of line item.
+                        int itemHeight = mContext.getResources().getDimensionPixelSize(
+                                R.dimen.car_double_line_list_item_height);
+                        layoutParams.removeRule(RelativeLayout.CENTER_VERTICAL);
+                        layoutParams.topMargin = (itemHeight - iconSize) / 2;
+                    } else {
+                        layoutParams.addRule(RelativeLayout.CENTER_VERTICAL);
+                        layoutParams.topMargin = 0;
+                    }
 
                     vh.getPrimaryIcon().requestLayout();
                 });
@@ -249,6 +289,10 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
                 mBinders.add(vh -> {
                     vh.getPrimaryIcon().setVisibility(View.VISIBLE);
                     vh.getPrimaryIcon().setImageDrawable(mPrimaryActionIconDrawable);
+                    vh.getPrimaryIcon().setOnClickListener(
+                            mPrimaryActionIconOnClickListener);
+                    vh.getPrimaryIcon().setClickable(
+                            mPrimaryActionIconOnClickListener != null);
                 });
                 break;
             default:
@@ -260,6 +304,7 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
         mBinders.add(vh -> {
             vh.getSeekBar().setMax(mMax);
             vh.getSeekBar().setProgress(mProgress);
+            vh.getSeekBar().setSecondaryProgress(mSecondaryProgress);
             vh.getSeekBar().setOnSeekBarChangeListener(mOnSeekBarChangeListener);
 
             if (!TextUtils.isEmpty(mText)) {
@@ -432,6 +477,16 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
     }
 
     /**
+     * Sets an {@code OnClickListener} for the icon representing the {@code Primary Action}.
+     *
+     * @param onClickListener the listener to be set for the primary action icon.
+     */
+    public void setPrimaryActionIconListener(View.OnClickListener onClickListener) {
+        mPrimaryActionIconOnClickListener = onClickListener;
+        markDirty();
+    }
+
+    /**
      * Sets {@code Primary Action} to be empty icon.
      *
      * {@code Seekbar} would have a start margin as if {@code Primary Action} were set as icon.
@@ -446,30 +501,45 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
      * Sets {@code Supplemental Action} to be represented by an {@code Supplemental Icon}.
      */
     public void setSupplementalIcon(@DrawableRes int iconResId,
-                                    boolean showSupplementalIconDivider) {
-        setSupplementalIcon(mContext.getDrawable(iconResId), showSupplementalIconDivider, null);
-    }
-
-    /**
-     * Sets {@code Supplemental Action} to be represented by an {@code Supplemental Icon}.
-     */
-    public void setSupplementalIcon(@DrawableRes int iconResId, boolean showSupplementalIconDivider,
-                                    @Nullable View.OnClickListener listener) {
-        setSupplementalIcon(mContext.getDrawable(iconResId), showSupplementalIconDivider, listener);
+            boolean showSupplementalIconDivider) {
+        setSupplementalIconInfo(mContext.getDrawable(iconResId), showSupplementalIconDivider);
     }
 
     /**
      * Sets {@code Supplemental Action} to be represented by an {@code Supplemental Icon}.
      */
     public void setSupplementalIcon(Drawable drawable, boolean showSupplementalIconDivider) {
-        setSupplementalIcon(drawable, showSupplementalIconDivider, null);
+        setSupplementalIconInfo(drawable, showSupplementalIconDivider);
+    }
+
+    /**
+     * Sets {@code OnClickListener} for a {@code Supplemental Icon}.
+     */
+    public void setSupplementalIconListener(View.OnClickListener listener) {
+        mSupplementalIconOnClickListener = listener;
+
+        markDirty();
+    }
+
+    private void setSupplementalIconInfo(Drawable drawable, boolean showSupplementalIconDivider) {
+        mSupplementalActionType = SUPPLEMENTAL_ACTION_SUPPLEMENTAL_ICON;
+
+        mSupplementalIconDrawable = drawable;
+        mShowSupplementalIconDivider = showSupplementalIconDivider;
+
+        markDirty();
     }
 
     /**
      * Sets {@code Supplemental Action} to be represented by an {@code Supplemental Icon}.
+     *
+     * @deprecated use either {@link #setSupplementalIcon(Drawable, boolean)} or
+     * {@link #setSupplementalIcon(int, boolean)} and
+     * {@link #setSupplementalIconListener(android.view.View.OnClickListener)}.
      */
+    @Deprecated
     public void setSupplementalIcon(Drawable drawable, boolean showSupplementalIconDivider,
-                                    @Nullable  View.OnClickListener listener) {
+            @Nullable  View.OnClickListener listener) {
         mSupplementalActionType = SUPPLEMENTAL_ACTION_SUPPLEMENTAL_ICON;
 
         mSupplementalIconDrawable = drawable;
@@ -520,10 +590,16 @@ public class SeekbarListItem extends ListItem<SeekbarListItem.ViewHolder> {
 
             mSupplementalIcon = itemView.findViewById(R.id.supplemental_icon);
             mSupplementalIconDivider = itemView.findViewById(R.id.supplemental_icon_divider);
+
+            int minTouchSize = itemView.getContext().getResources()
+                    .getDimensionPixelSize(R.dimen.car_touch_target_size);
+
+            MinTouchTargetHelper.ensureThat(mSupplementalIcon)
+                    .hasMinTouchSize(minTouchSize);
         }
 
         @Override
-        void complyWithUxRestrictions(CarUxRestrictions restrictions) {
+        protected void complyWithUxRestrictions(CarUxRestrictions restrictions) {
             CarUxRestrictionsUtils.comply(itemView.getContext(), restrictions, getText());
         }
 

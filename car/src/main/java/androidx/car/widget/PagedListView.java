@@ -268,6 +268,11 @@ public class PagedListView extends FrameLayout {
         mRecyclerView.addOnScrollListener(mRecyclerViewOnScrollListener);
         mRecyclerView.getRecycledViewPool().setMaxRecycledViews(0, 12);
 
+        if (a.getBoolean(R.styleable.PagedListView_verticallyCenterListContent, false)) {
+            // Setting the height of wrap_content allows the RecyclerView to center itself.
+            mRecyclerView.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        }
+
         int defaultGutterSize = getResources().getDimensionPixelSize(R.dimen.car_margin);
         mGutterSize = a.getDimensionPixelSize(R.styleable.PagedListView_gutterSize,
                 defaultGutterSize);
@@ -354,6 +359,12 @@ public class PagedListView extends FrameLayout {
         Drawable downButtonIcon = a.getDrawable(R.styleable.PagedListView_downButtonIcon);
         if (downButtonIcon != null) {
             setDownButtonIcon(downButtonIcon);
+        }
+
+        // Using getResourceId() over getColor() because setScrollbarColor() expects a color resId.
+        int scrollBarColor = a.getResourceId(R.styleable.PagedListView_scrollBarColor, -1);
+        if (scrollBarColor != -1) {
+            setScrollbarColor(scrollBarColor);
         }
 
         mScrollBarView.setVisibility(mScrollBarEnabled ? VISIBLE : GONE);
@@ -860,6 +871,12 @@ public class PagedListView extends FrameLayout {
         if (mRecyclerView.getLayoutManager().isViewPartiallyVisible(lastChild,
                 /* completelyVisible= */ false, /* acceptEndPointInclusion= */ false)) {
             scrollDistance = orientationHelper.getDecoratedStart(lastChild);
+            if (scrollDistance < 0) {
+                // Scroll value can be negative if the child is longer than the screen size and the
+                // visible area of the screen does not show the start of the child.
+                // Scroll to the next screen if the start value is negative
+                scrollDistance = screenSize;
+            }
         }
 
         // The iteration order matters. In case where there are 2 items longer than screen size, we
@@ -885,6 +902,7 @@ public class PagedListView extends FrameLayout {
                 break;
             }
         }
+
         mRecyclerView.smoothScrollBy(0, scrollDistance);
     }
 
@@ -1367,7 +1385,11 @@ public class PagedListView extends FrameLayout {
                     + (startRect.left - containerRect.left);
             int right = container.getRight()  - mDividerEndMargin
                     - (endRect.right - containerRect.right);
-            int bottom = container.getBottom() + spacing / 2 + mDividerHeight / 2;
+            // "(spacing + divider height) / 2" aligns the center of divider to that of spacing
+            // between two items.
+            // When spacing is an odd value (e.g. created by other decoration), space under divider
+            // is greater by 1dp.
+            int bottom = container.getBottom() + (spacing + mDividerHeight) / 2;
             int top = bottom - mDividerHeight;
 
             c.drawRect(left, top, right, bottom, mPaint);

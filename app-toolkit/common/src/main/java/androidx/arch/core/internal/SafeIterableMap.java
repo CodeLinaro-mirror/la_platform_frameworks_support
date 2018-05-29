@@ -201,6 +201,16 @@ public class SafeIterableMap<K, V> implements Iterable<Map.Entry<K, V>> {
     }
 
     @Override
+    public int hashCode() {
+        int h = 0;
+        Iterator<Map.Entry<K, V>> i = iterator();
+        while (i.hasNext()) {
+            h += i.next().hashCode();
+        }
+        return h;
+    }
+
+    @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
         builder.append("[");
@@ -230,6 +240,7 @@ public class SafeIterableMap<K, V> implements Iterable<Map.Entry<K, V>> {
             return mNext != null;
         }
 
+        @SuppressWarnings("ReferenceEquality")
         @Override
         public void supportRemove(@NonNull Entry<K, V> entry) {
             if (mExpectedEnd == entry && entry == mNext) {
@@ -246,6 +257,7 @@ public class SafeIterableMap<K, V> implements Iterable<Map.Entry<K, V>> {
             }
         }
 
+        @SuppressWarnings("ReferenceEquality")
         private Entry<K, V> nextNode() {
             if (mNext == mExpectedEnd || mExpectedEnd == null) {
                 return null;
@@ -302,6 +314,7 @@ public class SafeIterableMap<K, V> implements Iterable<Map.Entry<K, V>> {
         private Entry<K, V> mCurrent;
         private boolean mBeforeStart = true;
 
+        @SuppressWarnings("ReferenceEquality")
         @Override
         public void supportRemove(@NonNull Entry<K, V> entry) {
             if (entry == mCurrent) {
@@ -369,6 +382,7 @@ public class SafeIterableMap<K, V> implements Iterable<Map.Entry<K, V>> {
             return mKey + "=" + mValue;
         }
 
+        @SuppressWarnings("ReferenceEquality")
         @Override
         public boolean equals(Object obj) {
             if (obj == this) {
@@ -379,6 +393,11 @@ public class SafeIterableMap<K, V> implements Iterable<Map.Entry<K, V>> {
             }
             Entry entry = (Entry) obj;
             return mKey.equals(entry.mKey) && mValue.equals(entry.mValue);
+        }
+
+        @Override
+        public int hashCode() {
+            return mKey.hashCode() ^ mValue.hashCode();
         }
     }
 }
