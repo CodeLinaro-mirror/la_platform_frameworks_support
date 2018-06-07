@@ -54,6 +54,7 @@ import androidx.work.impl.model.WorkSpecDao;
 import androidx.work.impl.utils.taskexecutor.InstantTaskExecutorRule;
 import androidx.work.worker.ChainedArgumentWorker;
 import androidx.work.worker.EchoingWorker;
+import androidx.work.worker.ExceptionWorker;
 import androidx.work.worker.FailureWorker;
 import androidx.work.worker.RetryWorker;
 import androidx.work.worker.SleepTestWorker;
@@ -644,7 +645,7 @@ public class WorkerWrapperTest extends DatabaseTest {
     }
 
     @Test
-    @SmallTest
+    @LargeTest
     public void testInterruption() throws InterruptedException {
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class).build();
         insertWork(work);
@@ -658,5 +659,38 @@ public class WorkerWrapperTest extends DatabaseTest {
         workerWrapper.interrupt();
         Thread.sleep(6000L);
         verify(mMockListener).onExecuted(work.getStringId(), false, true);
+    }
+
+    @Test
+    @SmallTest
+    public void testException_isTreatedAsFailure() {
+        OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(ExceptionWorker.class).build();
+        insertWork(work);
+
+        new WorkerWrapper.Builder(mContext, mDatabase, work.getStringId())
+                .withSchedulers(Collections.singletonList(mMockScheduler))
+                .withListener(mMockListener)
+                .build()
+                .run();
+
+        assertThat(mWorkSpecDao.getState(work.getStringId()), is(FAILED));
+    }
+
+    @Test
+    @LargeTest
+    public void testWorkerWrapper_handlesWorkSpecDeletion() throws InterruptedException {
+        OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(SleepTestWorker.class).build();
+        insertWork(work);
+
+        WorkerWrapper workerWrapper =
+                new WorkerWrapper.Builder(mContext, mDatabase, work.getStringId())
+                        .withSchedulers(Collections.singletonList(mMockScheduler))
+                        .withListener(mMockListener)
+                        .build();
+
+        Executors.newSingleThreadExecutor().submit(workerWrapper);
+        mWorkSpecDao.delete(work.getStringId());
+        Thread.sleep(6000L);
+        verify(mMockListener).onExecuted(work.getStringId(), false, false);
     }
 }

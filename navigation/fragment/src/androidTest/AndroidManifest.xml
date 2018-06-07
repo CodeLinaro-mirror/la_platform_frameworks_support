@@ -17,8 +17,10 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="androidx.navigation.fragment.test">
+    <uses-sdk android:targetSdkVersion="${target-sdk-version}"/>
     <application>
         <activity android:name="androidx.navigation.fragment.test.XmlNavigationActivity" />
         <activity android:name="androidx.navigation.fragment.test.DynamicNavigationActivity" />
+        <activity android:name="androidx.navigation.fragment.test.EmbeddedXmlActivity" />
     </application>
 </manifest>

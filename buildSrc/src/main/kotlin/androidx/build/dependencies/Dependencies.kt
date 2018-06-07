@@ -16,9 +16,6 @@
 
 package androidx.build.dependencies
 
-import org.gradle.api.artifacts.ExternalModuleDependency
-import org.gradle.kotlin.dsl.exclude
-
 const val AUTO_COMMON = "com.google.auto:auto-common:0.6"
 const val ANTLR = "org.antlr:antlr4:4.5.3"
 const val APACHE_COMMONS_CODEC = "commons-codec:commons-codec:1.10"
@@ -35,8 +32,8 @@ const val INTELLIJ_ANNOTATIONS = "com.intellij:annotations:12.0"
 const val JAVAPOET = "com.squareup:javapoet:1.8.0"
 const val JSR250 = "javax.annotation:javax.annotation-api:1.2"
 const val JUNIT = "junit:junit:4.12"
-const val KOTLIN_STDLIB = "org.jetbrains.kotlin:kotlin-stdlib:1.2.20"
-const val KOTLIN_METADATA = "me.eugeniomarletti:kotlin-metadata:1.2.1"
+const val KOTLIN_STDLIB = "org.jetbrains.kotlin:kotlin-stdlib:1.2.41"
+const val KOTLIN_METADATA = "me.eugeniomarletti.kotlin.metadata:kotlin-metadata:1.4.0"
 const val LINT = "com.android.tools.lint:lint:26.2.0-alpha13"
 const val MOCKITO_CORE = "org.mockito:mockito-core:2.7.6"
 const val MULTIDEX = "androidx.multidex:multidex:2.0.0"
@@ -88,15 +85,3 @@ const val ARCH_LIFECYCLE_LIVEDATA_CORE =
         "androidx.lifecycle:lifecycle-livedata-core:2.0.0-alpha1@aar"
 const val ARCH_LIFECYCLE_VIEWMODEL = "androidx.lifecycle:lifecycle-viewmodel:2.0.0-alpha1@aar"
 const val ARCH_LIFECYCLE_EXTENSIONS = "androidx.lifecycle:lifecycle-extensions:2.0.0-alpha1@aar"
-
-// Excludes
-val ESPRESSO_EXCLUDE: ExternalModuleDependency.() -> Unit = {
-    exclude(group = "androidx.annotation")
-    exclude(group = "androidx.appcompat")
-    exclude(group = "androidx.recyclerview")
-    exclude(group = "androidx.legacy")
-}
-
-val BYTEBUDDY_EXCLUDE: ExternalModuleDependency.() -> Unit = {
-    exclude(group = "net.bytebuddy")
-}

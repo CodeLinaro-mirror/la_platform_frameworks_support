@@ -16,6 +16,8 @@
 
 package androidx.car.widget;
 
+import static java.lang.annotation.RetentionPolicy.SOURCE;
+
 import android.car.drivingstate.CarUxRestrictions;
 import android.content.Context;
 import android.content.res.Resources;
@@ -30,10 +32,6 @@ import android.widget.RelativeLayout;
 import android.widget.Switch;
 import android.widget.TextView;
 
-import java.lang.annotation.Retention;
-import java.util.ArrayList;
-import java.util.List;
-
 import androidx.annotation.DrawableRes;
 import androidx.annotation.IdRes;
 import androidx.annotation.IntDef;
@@ -42,7 +40,9 @@ import androidx.car.R;
 import androidx.car.utils.CarUxRestrictionsUtils;
 import androidx.recyclerview.widget.RecyclerView;
 
-import static java.lang.annotation.RetentionPolicy.SOURCE;
+import java.lang.annotation.Retention;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Class to build a list item of text.
@@ -721,7 +721,7 @@ public class TextListItem extends ListItem<TextListItem.ViewHolder> {
      * @param listener the callback that will run when icon is clicked.
      */
     public void setSupplementalIcon(Drawable drawable, boolean showDivider,
-                                    View.OnClickListener listener) {
+            View.OnClickListener listener) {
         mSupplementalActionType = SUPPLEMENTAL_ACTION_SUPPLEMENTAL_ICON;
 
         mSupplementalIconDrawable = drawable;
@@ -858,6 +858,12 @@ public class TextListItem extends ListItem<TextListItem.ViewHolder> {
             mAction1Divider = itemView.findViewById(R.id.action1_divider);
             mAction2 = itemView.findViewById(R.id.action2);
             mAction2Divider = itemView.findViewById(R.id.action2_divider);
+
+            int minTouchSize = itemView.getContext().getResources()
+                    .getDimensionPixelSize(R.dimen.car_touch_target_size);
+
+            MinTouchTargetHelper.ensureThat(mSupplementalIcon)
+                    .hasMinTouchSize(minTouchSize);
         }
 
         /**
@@ -868,7 +874,7 @@ public class TextListItem extends ListItem<TextListItem.ViewHolder> {
          * @param restrictions current car UX restrictions.
          */
         @Override
-        void complyWithUxRestrictions(CarUxRestrictions restrictions) {
+        protected void complyWithUxRestrictions(CarUxRestrictions restrictions) {
             CarUxRestrictionsUtils.comply(itemView.getContext(), restrictions, getBody());
         }
 
