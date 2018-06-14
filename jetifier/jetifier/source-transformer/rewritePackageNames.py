@@ -95,7 +95,7 @@ def createRewriteCommand(executionConfig):
   rewriterTextBuilder = StringBuilder()
   rewriteRules = executionConfig.jetifierConfig.getTypesMap()
   for rule in rewriteRules:
-    rewriterTextBuilder.add("s|").add(rule.fromName).add("|").add(rule.toName).add("|g\n")
+    rewriterTextBuilder.add("s|").add(rule.fromName.replace(".", "\.")).add("|").add(rule.toName).add("|g\n")
   for rule in HARDCODED_RULES_REVERSE:
     rewriterTextBuilder.add(rule)
   scriptPath = "/tmp/jetifier-sed-script.txt"
@@ -127,7 +127,7 @@ def main():
   pathOfThisFile = os.path.realpath(__file__)
   jetifierPath = os.path.abspath(os.path.join(pathOfThisFile, "..", ".."))
 
-  jetifierConfigPath = os.path.join(jetifierPath, "core", "src", "main", "resources", "default.config")
+  jetifierConfigPath = os.path.join(jetifierPath, "source-transformer", "default.config")
   print("Parsing " + jetifierConfigPath)
   jetifierConfig = JetifierConfig.parse(jetifierConfigPath)
 

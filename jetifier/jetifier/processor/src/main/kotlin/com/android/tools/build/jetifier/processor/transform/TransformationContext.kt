@@ -18,7 +18,9 @@ package com.android.tools.build.jetifier.processor.transform
 
 import com.android.tools.build.jetifier.core.TypeRewriter
 import com.android.tools.build.jetifier.core.config.Config
-import com.android.tools.build.jetifier.core.pom.DependencyVersionsMap
+import com.android.tools.build.jetifier.core.pom.DependencyVersions
+import com.android.tools.build.jetifier.core.type.JavaType
+import com.android.tools.build.jetifier.core.utils.Log
 import java.util.regex.Pattern
 
 /**
@@ -32,11 +34,11 @@ class TransformationContext(
      * Whether to use fallback if type in our scope is missing instead of throwing an exception.
      */
     val useFallbackIfTypeIsMissing: Boolean = true,
-    val versionsMap: DependencyVersionsMap = DependencyVersionsMap.LATEST_RELEASED
+    val versions: DependencyVersions = DependencyVersions.EMPTY
 ) {
 
     // Merges all packages prefixes into one regEx pattern
-    private val packagePrefixPattern = Pattern.compile(
+    val packagePrefixPattern = Pattern.compile(
         "^(" + config.restrictToPackagePrefixes.map { "($it)" }.joinToString("|") + ").*$")
 
     val typeRewriter: TypeRewriter = TypeRewriter(config, useFallbackIfTypeIsMissing)
@@ -57,8 +59,6 @@ class TransformationContext(
     /** Counter for [reportNoPackageMappingFoundFailure] calls. */
     var packageMappingNotFoundFailuresCounts = 0
 
-    var libraryName: String = ""
-
     /** Total amount of errors found during the transformation process */
     fun errorsTotal() = mappingNotFoundFailuresCount + proGuardMappingNotFoundFailuresCount +
         packageMappingNotFoundFailuresCounts
@@ -67,23 +67,38 @@ class TransformationContext(
      * Reports that there was a reference found that satisfies [isEligibleForRewrite] but no
      * mapping was found to rewrite it.
      */
-    fun reportNoMappingFoundFailure() {
-        mappingNotFoundFailuresCount++
+    fun reportNoMappingFoundFailure(tag: String, type: JavaType) {
+        if (!useFallbackIfTypeIsMissing || (rewritingSupportLib && isInReversedMode)) {
+            mappingNotFoundFailuresCount++
+            Log.e(tag, "No mapping for: " + type)
+        } else {
+            Log.w(tag, "No mapping for: " + type)
+        }
     }
 
     /**
      * Reports that there was a reference found in a ProGuard file that satisfies
      * [isEligibleForRewrite] but no mapping was found to rewrite it.
      */
-    fun reportNoProGuardMappingFoundFailure() {
-        proGuardMappingNotFoundFailuresCount++
+    fun reportNoProGuardMappingFoundFailure(tag: String, type: String) {
+        if (!useFallbackIfTypeIsMissing || (rewritingSupportLib && isInReversedMode)) {
+            proGuardMappingNotFoundFailuresCount++
+            Log.e(tag, "No mapping for: " + type)
+        } else {
+            Log.w(tag, "No mapping for: " + type)
+        }
     }
 
     /**
      * Reports that there was a package reference found in a manifest file during a support library
      * artifact rewrite but no mapping was found for it.
      */
-    fun reportNoPackageMappingFoundFailure() {
-        packageMappingNotFoundFailuresCounts++
+    fun reportNoPackageMappingFoundFailure(tag: String, packageName: String, fileName: String) {
+        if (!useFallbackIfTypeIsMissing || (rewritingSupportLib && isInReversedMode)) {
+            packageMappingNotFoundFailuresCounts++
+            Log.e(tag, "No mapping for package '%s' in '%s'", packageName, fileName)
+        } else {
+            Log.w(tag, "No mapping for package '%s' in '%s'", packageName, fileName)
+        }
     }
 }

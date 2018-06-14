@@ -40,7 +40,6 @@ import static org.junit.Assert.assertThat;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
-import androidx.annotation.NonNull;
 import android.support.test.InstrumentationRegistry;
 import android.support.test.annotation.UiThreadTest;
 import android.support.test.espresso.Espresso;
@@ -49,15 +48,18 @@ import android.support.test.espresso.matcher.ViewMatchers;
 import android.support.test.filters.MediumTest;
 import android.support.test.rule.ActivityTestRule;
 import android.support.test.runner.AndroidJUnit4;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.OrientationHelper;
-import androidx.recyclerview.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.car.test.R;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.OrientationHelper;
+import androidx.recyclerview.widget.RecyclerView;
 
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -71,8 +73,6 @@ import org.junit.runner.RunWith;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import androidx.car.test.R;
 
 /** Unit tests for {@link PagedListView}. */
 @RunWith(AndroidJUnit4.class)
@@ -338,8 +338,16 @@ public final class PagedListViewTest {
         final int color = R.color.car_teal_700;
         mPagedListView.setScrollbarColor(color);
 
-        for (int style : new int[] {DayNightStyle.AUTO, DayNightStyle.AUTO_INVERSE,
-                DayNightStyle.FORCE_NIGHT, DayNightStyle.FORCE_DAY}) {
+        int[] styles = new int[] {
+                DayNightStyle.AUTO,
+                DayNightStyle.AUTO_INVERSE,
+                DayNightStyle.ALWAYS_LIGHT,
+                DayNightStyle.ALWAYS_DARK,
+                DayNightStyle.FORCE_DAY,
+                DayNightStyle.FORCE_NIGHT,
+        };
+
+        for (int style : styles) {
             mPagedListView.setDayNightStyle(style);
 
             assertThat(mPagedListView.mScrollBarView.getScrollbarThumbColor(),
@@ -348,10 +356,22 @@ public final class PagedListViewTest {
     }
 
     @Test
-    public void testDefaultScrollBarTopMargin() {
+    public void testNoVerticalPaddingOnScrollBar() {
         // Just need enough items to ensure the scroll bar is showing.
         setUpPagedListView(ITEMS_PER_PAGE * 10);
-        onView(withId(R.id.paged_scroll_view)).check(matches(withTopMargin(0)));
+        onView(withId(R.id.paged_scroll_view))
+                .check(matches(withTopPadding(0)))
+                .check(matches(withBottomPadding(0)));
+    }
+
+    @Test
+    public void testDefaultScrollBarTopMargin() {
+        Resources res = InstrumentationRegistry.getContext().getResources();
+        int defaultTopMargin = res.getDimensionPixelSize(R.dimen.car_padding_4);
+
+        // Just need enough items to ensure the scroll bar is showing.
+        setUpPagedListView(ITEMS_PER_PAGE * 10);
+        onView(withId(R.id.paged_scroll_view)).check(matches(withTopMargin(defaultTopMargin)));
     }
 
     @Test
@@ -552,6 +572,10 @@ public final class PagedListViewTest {
         item.setBody(mActivity.getResources().getString(R.string.longer_than_screen_size));
         items.add(longItemPos, item);
 
+        item = new TextListItem(mActivity);
+        item.setTitle("title add item after long item");
+        items.add(item);
+
         setupPagedListView(items);
 
         OrientationHelper orientationHelper = OrientationHelper.createVerticalHelper(
@@ -589,6 +613,11 @@ public final class PagedListViewTest {
         // Verify long item end is aligned to bottom.
         assertThat(orientationHelper.getDecoratedEnd(longItem),
                 is(equalTo(mPagedListView.getHeight())));
+
+        onView(withId(R.id.page_down)).perform(click());
+        // Verify that the long item is no longer visible; Should be on the next child
+        assertThat(orientationHelper.getDecoratedStart(longItem),
+                is(lessThan(mPagedListView.getRecyclerView().getTop())));
     }
 
     @Test
@@ -779,6 +808,46 @@ public final class PagedListViewTest {
                 ViewGroup.MarginLayoutParams params =
                         (ViewGroup.MarginLayoutParams) view.getLayoutParams();
                 return topMargin == params.topMargin;
+            }
+        };
+    }
+
+    /**
+     * Returns a matcher that matches {@link View}s that have the given top padding.
+     *
+     * @param topPadding The top padding value to match to.
+     */
+    @NonNull
+    public static Matcher<View> withTopPadding(int topPadding) {
+        return new TypeSafeMatcher<View>() {
+            @Override
+            public void describeTo(Description description) {
+                description.appendText("with top padding: " + topPadding);
+            }
+
+            @Override
+            public boolean matchesSafely(View view) {
+                return topPadding == view.getPaddingTop();
+            }
+        };
+    }
+
+    /**
+     * Returns a matcher that matches {@link View}s that have the given bottom padding.
+     *
+     * @param bottomPadding The bottom padding value to match to.
+     */
+    @NonNull
+    public static Matcher<View> withBottomPadding(int bottomPadding) {
+        return new TypeSafeMatcher<View>() {
+            @Override
+            public void describeTo(Description description) {
+                description.appendText("with bottom padding: " + bottomPadding);
+            }
+
+            @Override
+            public boolean matchesSafely(View view) {
+                return bottomPadding == view.getPaddingBottom();
             }
         };
     }

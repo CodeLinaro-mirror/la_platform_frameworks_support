@@ -17,7 +17,6 @@
 package com.android.tools.build.jetifier.processor.transform.bytecode
 
 import com.android.tools.build.jetifier.core.config.Config
-import com.android.tools.build.jetifier.core.proguard.ProGuardTypesMap
 import com.android.tools.build.jetifier.core.rule.RewriteRule
 import com.android.tools.build.jetifier.core.rule.RewriteRulesMap
 import com.android.tools.build.jetifier.core.type.JavaType
@@ -37,8 +36,9 @@ import java.io.File
 class ClassFilesMoveTest {
 
     companion object {
-        private val TEST_CONFIG = Config(
+        private val TEST_CONFIG = Config.fromOptional(
             restrictToPackagePrefixes = setOf("android/support"),
+            reversedRestrictToPackagesPrefixes = setOf("androidx"),
             rulesMap = RewriteRulesMap(
                 RewriteRule("android/support/annotation/(.*)", "ignore"),
                 RewriteRule("android/support/v7/preference/R(.*)", "ignore"),
@@ -49,7 +49,6 @@ class ClassFilesMoveTest {
                 RewriteRule("android/support/v7/preference/R(.*)", "ignore"),
                 RewriteRule("android/support/v4/(.*)", "ignore")
             ),
-            pomRewriteRules = emptySet(),
             typesMap = TypesMap(mapOf(
                 "android/support/v7/preference/Preference"
                         to "androidx/support/preference/Preference",
@@ -65,8 +64,7 @@ class ClassFilesMoveTest {
                         to "androidx/support/preference/SwitchPreference",
                 "android/support/v7/preference/PreferenceDataStore"
                         to "androidx/support/preference/PreferenceDataStore"
-            ).map { JavaType(it.key) to JavaType(it.value) }.toMap()),
-            proGuardMap = ProGuardTypesMap.EMPTY
+            ).map { JavaType(it.key) to JavaType(it.value) }.toMap())
         )
     }
 
@@ -76,14 +74,12 @@ class ClassFilesMoveTest {
      *
      * Note: The expected archive does not contain rewritten classes - they were only manually
      * moved. Which is fine because this test validates only files locations.
-     *
-     * Note: This runs in support library rewrite mode which allows to move classes around.
      */
     @Test fun fileMove_forwardRewrite_shouldMoveFilesProperly() {
         val inputZipPath = "/fileRenameTest/inputTestLib.zip"
         val expectedZipPath = "/fileRenameTest/expectedTestLib.zip"
 
-        val processor = Processor.createProcessor(TEST_CONFIG, rewritingSupportLib = true)
+        val processor = Processor.createProcessor(TEST_CONFIG)
         val inputFile = File(javaClass.getResource(inputZipPath).file)
 
         val tempDir = createTempDir()
@@ -105,7 +101,7 @@ class ClassFilesMoveTest {
         val inputZipPath = "/fileRenameTest/inputTestLibNested.zip"
         val expectedZipPath = "/fileRenameTest/expectedTestLibNested.zip"
 
-        val processor = Processor.createProcessor(TEST_CONFIG, rewritingSupportLib = true)
+        val processor = Processor.createProcessor(TEST_CONFIG)
         val inputFile = File(javaClass.getResource(inputZipPath).file)
 
         val tempDir = createTempDir()
@@ -122,14 +118,12 @@ class ClassFilesMoveTest {
     /**
      * Rewrites the input archive and then applies reversed mode to rewrite it back. The final
      * produced archive has to have the same directory structure as the input one.
-     *
-     * Note: This runs in support library rewrite mode which allows to move classes around.
      */
     @Test fun fileMove_forwardRewrite_backwardsRewrite_shouldKeepFilesProperly() {
         val inputZipPath = "/fileRenameTest/inputTestLib.zip"
 
         // Transform forward
-        val processor = Processor.createProcessor(TEST_CONFIG, rewritingSupportLib = true)
+        val processor = Processor.createProcessor(TEST_CONFIG)
         val inputFile = File(javaClass.getResource(inputZipPath).file)
 
         val tempDir = createTempDir()
@@ -147,27 +141,6 @@ class ClassFilesMoveTest {
             FileMapping(resultFiles.first(), expectedFile2)))
 
         testArchivesAreSame(resultFiles2.first(), File(javaClass.getResource(inputZipPath).file))
-
-        tempDir.delete()
-    }
-
-    /**
-     * Runs the rewrite but with support library rewrite mode off which means that none of the files
-     * should be moved.
-     */
-    @Test fun fileMove_forwardRewrite_noSupportLibMode_noFilesMove() {
-        val inputZipPath = "/fileRenameTest/inputTestLib.zip"
-
-        val processor = Processor.createProcessor(TEST_CONFIG, rewritingSupportLib = false)
-        val inputFile = File(javaClass.getResource(inputZipPath).file)
-
-        val tempDir = createTempDir()
-        val expectedFile = File(createTempDir(), inputFile.name)
-
-        val resultFiles = processor.transform(setOf(FileMapping(inputFile, expectedFile)))
-
-        Truth.assertThat(resultFiles).hasSize(1)
-        testArchivesAreSame(resultFiles.first(), File(javaClass.getResource(inputZipPath).file))
 
         tempDir.delete()
     }

@@ -19,7 +19,6 @@ package androidx.work;
 import android.arch.persistence.room.TypeConverter;
 import android.support.annotation.NonNull;
 import android.support.annotation.VisibleForTesting;
-import android.util.Log;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -591,24 +590,26 @@ public final class Data {
         }
 
         /**
-         * Puts all input key-value pairs into the Builder.  Any non-valid types will be logged and
-         * ignored.  Valid types are: Boolean, Integer, Long, Double, String, and array versions of
-         * each of those types.  Any {@code null} values will also be ignored.
+         * Puts all input key-value pairs into the Builder. Valid types are: Boolean, Integer,
+         * Long, Float, Double, String, and array versions of each of those types.
+         * Invalid types throw an {@link IllegalArgumentException}.
          *
          * @param values A {@link Map} of key-value pairs to add
+         * @return The {@link Builder}
          */
-        public void putAll(Map<String, Object> values) {
+        public Builder putAll(Map<String, Object> values) {
             for (Map.Entry<String, Object> entry : values.entrySet()) {
                 String key = entry.getKey();
                 Object value = entry.getValue();
                 if (value == null) {
-                    Log.w(TAG, String.format("Ignoring null value for key %s", key));
+                    mValues.put(key, null);
                     continue;
                 }
                 Class valueType = value.getClass();
                 if (valueType == Boolean.class
                         || valueType == Integer.class
                         || valueType == Long.class
+                        || valueType == Float.class
                         || valueType == Double.class
                         || valueType == String.class
                         || valueType == Boolean[].class
@@ -629,10 +630,11 @@ public final class Data {
                 } else if (valueType == double[].class) {
                     mValues.put(key, convertPrimitiveDoubleArray((double[]) value));
                 } else {
-                    Log.w(TAG, String.format(
-                            "Ignoring key %s because of invalid type %s", key, valueType));
+                    throw new IllegalArgumentException(
+                            String.format("Key %s has invalid type %s", key, valueType));
                 }
             }
+            return this;
         }
 
         /**

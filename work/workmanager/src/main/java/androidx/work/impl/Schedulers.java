@@ -25,6 +25,7 @@ import android.support.annotation.RestrictTo;
 import android.support.annotation.VisibleForTesting;
 import android.util.Log;
 
+import androidx.work.Configuration;
 import androidx.work.impl.background.systemalarm.SystemAlarmScheduler;
 import androidx.work.impl.background.systemalarm.SystemAlarmService;
 import androidx.work.impl.background.systemjob.SystemJobScheduler;
@@ -99,13 +100,16 @@ public class Schedulers {
         }
     }
 
-    static @NonNull Scheduler createBestAvailableBackgroundScheduler(@NonNull Context context) {
+    static @NonNull Scheduler createBestAvailableBackgroundScheduler(
+            @NonNull Context context,
+            @NonNull Configuration configuration) {
+
         Scheduler scheduler;
         boolean enableFirebaseJobService = false;
         boolean enableSystemAlarmService = false;
 
         if (Build.VERSION.SDK_INT >= WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL) {
-            scheduler = new SystemJobScheduler(context);
+            scheduler = new SystemJobScheduler(context, configuration);
             setComponentEnabled(context, SystemJobService.class, true);
             Log.d(TAG, "Created SystemJobScheduler and enabled SystemJobService");
         } else {
@@ -121,7 +125,13 @@ public class Schedulers {
             }
         }
 
-        setComponentEnabled(context, FIREBASE_JOB_SERVICE_CLASSNAME, enableFirebaseJobService);
+        try {
+            Class firebaseJobServiceClass = Class.forName(FIREBASE_JOB_SERVICE_CLASSNAME);
+            setComponentEnabled(context, firebaseJobServiceClass, enableFirebaseJobService);
+        } catch (ClassNotFoundException e) {
+            // Do nothing.
+        }
+
         setComponentEnabled(context, SystemAlarmService.class, enableSystemAlarmService);
 
         return scheduler;

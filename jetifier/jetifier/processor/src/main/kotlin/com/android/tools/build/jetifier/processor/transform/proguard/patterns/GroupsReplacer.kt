@@ -21,31 +21,54 @@ import java.util.regex.Pattern
 
 /**
  * Applies replacements on a matched string using the given [pattern] and its groups. Each group is
- * mapped using a lambda from [groupsMap].
+ * mapped using a lambda from [groupsMap]. If there is more results for each group it expands into
+ * all possible replacements (Cartesian product) and returns multiple results.
  */
 class GroupsReplacer(
-    val pattern: Pattern,
-    private val groupsMap: List<(String) -> String>
+        val pattern: Pattern,
+        private val groupsMap: List<(String) -> List<String>>
 ) {
 
     /**
      * Takes the given [matcher] and replace its matched groups using mapping functions given in
      * [groupsMap].
      */
-    fun runReplacements(matcher: Matcher): String {
-        var result = matcher.group(0)
+    fun runReplacements(matcher: Matcher): List<String> {
+        val start = matcher.group(0)
 
-        // We go intentionally backwards to replace using indexes
+        var results = mutableListOf<String>(start)
+        var tempResults = mutableListOf<String>()
+
+        // For each group, apply the corresponding replacement. Iterate backwards over replacements
+        // to avoid having to recompute replacement string indexes, also we could replace something
+        // twice
         for (i in groupsMap.size - 1 downTo 0) {
             val groupVal = matcher.group(i + 1) ?: continue
             val localStart = matcher.start(i + 1) - matcher.start()
             val localEnd = matcher.end(i + 1) - matcher.start()
 
-            result = result.replaceRange(
-                startIndex = localStart,
-                endIndex = localEnd,
-                replacement = groupsMap[i].invoke(groupVal))
+            // Call the corresponding replacer for this group
+            val replacements = groupsMap[i].invoke(groupVal)
+
+            // Update the Cartesian product, copying each existing element of results and replacing
+            // groupVal in each with a different element of replacements
+            tempResults.clear()
+            results.forEach {
+                result -> replacements.forEach {
+                    tempResults.add(
+                        // Because we iterate in reverse, we know the index of groupVal in result
+                        // will be the same as the index of groupVal in start
+                        result.replaceRange(
+                            startIndex = localStart,
+                            endIndex = localEnd,
+                            replacement = it
+                        )
+                    )
+                }
+            }
+
+            results = tempResults.also { tempResults = results } // Swap
         }
-        return result
+        return results.toList()
     }
 }

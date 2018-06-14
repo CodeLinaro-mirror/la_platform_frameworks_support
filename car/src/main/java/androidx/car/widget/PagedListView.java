@@ -370,8 +370,10 @@ public class PagedListView extends FrameLayout {
         mScrollBarView.setVisibility(mScrollBarEnabled ? VISIBLE : GONE);
 
         if (mScrollBarEnabled) {
-            int topMargin =
-                    a.getDimensionPixelSize(R.styleable.PagedListView_scrollBarTopMargin, 0);
+            // Use the top margin that is defined in the layout as the default value.
+            int topMargin = a.getDimensionPixelSize(
+                    R.styleable.PagedListView_scrollBarTopMargin,
+                    ((MarginLayoutParams) mScrollBarView.getLayoutParams()).topMargin);
             setScrollBarTopMargin(topMargin);
         } else {
             MarginLayoutParams params = (MarginLayoutParams) mRecyclerView.getLayoutParams();
@@ -871,6 +873,12 @@ public class PagedListView extends FrameLayout {
         if (mRecyclerView.getLayoutManager().isViewPartiallyVisible(lastChild,
                 /* completelyVisible= */ false, /* acceptEndPointInclusion= */ false)) {
             scrollDistance = orientationHelper.getDecoratedStart(lastChild);
+            if (scrollDistance < 0) {
+                // Scroll value can be negative if the child is longer than the screen size and the
+                // visible area of the screen does not show the start of the child.
+                // Scroll to the next screen if the start value is negative
+                scrollDistance = screenSize;
+            }
         }
 
         // The iteration order matters. In case where there are 2 items longer than screen size, we
@@ -896,6 +904,7 @@ public class PagedListView extends FrameLayout {
                 break;
             }
         }
+
         mRecyclerView.smoothScrollBy(0, scrollDistance);
     }
 

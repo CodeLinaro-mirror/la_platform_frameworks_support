@@ -103,9 +103,15 @@ limitations under the License.
                  "auto". -->
             <enum name="auto_inverse" value="1" />
             <!-- Fixes the colors to be light colored.  -->
-            <enum name="force_night" value="2" />
+            <enum name="always_light" value="2" />
             <!-- Fixes the colors to be dark colored.  -->
-            <enum name="force_day" value="3" />
+            <enum name="always_dark" value="3" />
+            <!-- Fixes the colors to be light colored.
+                 Deprecated: use "always_light" instead. -->
+            <enum name="force_night" value="4" />
+            <!-- Fixes the colors to be dark colored.
+                 Deprecated: use "always_dark" instead. -->
+            <enum name="force_day" value="5" />
         </attr>
     </declare-styleable>
 
@@ -195,10 +201,10 @@ limitations under the License.
 
         <!-- The background color of the drawer. -->
         <attr name="drawerBackgroundColor" format="color"/>
-        <!-- The color of the header text and arrow in the drawer when it is open. -->
-        <attr name="drawerOpenHeaderColor" format="color"/>
-        <!-- The color of the header text and arrow in the drawer when it is closed. -->
-        <attr name="drawerClosedHeaderColor" format="color"/>
+        <!-- The color of the header text and arrow in the drawer. -->
+        <attr name="drawerHeaderColor" format="color"/>
+        <!-- The ripple color for items in the drawer. -->
+        <attr name="drawerRippleColor" format="color"/>
         <!-- The TextAppearance of each item's title text in the drawer list. -->
         <attr name="drawerItemTitleTextAppearance" format="reference"/>
         <!-- The TextAppearance of each item's body text in the drawer list. -->

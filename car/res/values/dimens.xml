@@ -132,6 +132,7 @@ limitations under the License.
     <dimen name="car_dialog_header_height">@dimen/car_card_header_height</dimen>
     <dimen name="car_dialog_action_bar_height">@dimen/car_card_action_bar_height</dimen>
     <dimen name="car_dialog_elevation">16dp</dimen>
+    <dimen name="car_list_dialog_title_elevation">16dp</dimen>
 
     <!-- Slide Up Menu -->
     <dimen name="car_slide_up_menu_initial_height">76dp</dimen>
@@ -180,10 +181,6 @@ limitations under the License.
     <!-- Drawer Dimensions -->
     <!-- Size of progress-bar in Drawer -->
     <dimen name="car_drawer_progress_bar_size">48dp</dimen>
-
-    <!-- The ending margin of the drawer. Is is the amount that the navigation drawer does not
-       cover the screen. -->
-    <dimen name="car_drawer_margin_end">96dp</dimen>
 
     <!-- Drawer Max Width -->
     <dimen name="car_drawer_max_width">720dp</dimen>

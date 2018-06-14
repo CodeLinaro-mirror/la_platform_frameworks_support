@@ -26,7 +26,7 @@ android-support-collections,androidx.collection_collection
 android-support-compat,androidx.core_core
 android-support-constraint-layout,androidx-constraintlayout_constraintlayout
 android-support-constraint-layout-solver,androidx-constraintlayout_constraintlayout-solver
-android-support-contentpaging,androidx.contentpaging_contentpaging
+android-support-contentpaging,androidx.contentpager_contentpager
 android-support-coordinatorlayout,androidx.coordinatorlayout_coordinatorlayout
 android-support-core-ui,androidx.legacy_legacy-support-core-ui
 android-support-core-utils,androidx.legacy_legacy-support-core-utils
@@ -88,7 +88,7 @@ android-arch-room-common,androidx.room_room-common
 android-arch-room-migration,androidx.room_room-migration
 android-arch-room-runtime,androidx.room_room-runtime
 android-arch-room-testing,androidx.room_room-testing
-$(ANDROID_SUPPORT_DESIGN_TARGETS),androidx.design_design"""
+$(ANDROID_SUPPORT_DESIGN_TARGETS),com.google.android.material_material"""
 
 reader = csv.reader(target_map.split('\n'), delimiter=',')
 
@@ -100,7 +100,7 @@ print("Writing " + scriptPath)
 with open(scriptPath, 'w') as scriptFile:
   scriptFile.write(str(rewriterTextBuilder))
 
-rewriteCommand = "time find . -name out -prune -o -name .git -prune -o -name .repo -prune -o -iregex '.*\.mk' -print | xargs -n 1 --no-run-if-empty -P 64 sed -i -f /tmp/jetifier-make-sed-script.txt"
+rewriteCommand = "time find . -name out -prune -o -name .git -prune -o -name .repo -prune -o -iregex '.*\.mk\|.*\.bp' -print | xargs -n 1 --no-run-if-empty -P 64 sed -i -f /tmp/jetifier-make-sed-script.txt"
 
 print("""
 Will run command:

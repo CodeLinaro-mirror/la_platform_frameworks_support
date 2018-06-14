@@ -40,7 +40,7 @@ import com.squareup.javapoet.MethodSpec
 import com.squareup.javapoet.ParameterSpec
 import com.squareup.javapoet.TypeName
 import com.squareup.javapoet.TypeSpec
-import org.jetbrains.kotlin.load.java.JvmAbi
+import me.eugeniomarletti.kotlin.metadata.shadow.load.java.JvmAbi
 import stripNonJava
 import javax.annotation.processing.ProcessingEnvironment
 import javax.lang.model.element.ElementKind
@@ -353,7 +353,7 @@ class DaoWriter(val dao: Dao, val processingEnv: ProcessingEnvironment)
                         addCode(createInsertionMethodBody(insertionMethod, fields))
                     }.build()
                     PreparedStmtQuery(fields, methodImpl)
-                }.filterNotNull()
+                }
     }
 
     private fun createInsertionMethodBody(
@@ -429,7 +429,7 @@ class DaoWriter(val dao: Dao, val processingEnv: ProcessingEnvironment)
             methods: List<T>, methodPrefix: String,
             implCallback: (T, Entity) -> TypeSpec
     ): List<PreparedStmtQuery> {
-        return methods.map { method ->
+        return methods.mapNotNull { method ->
             val entities = method.entities
 
             if (entities.isEmpty()) {
@@ -445,7 +445,7 @@ class DaoWriter(val dao: Dao, val processingEnv: ProcessingEnvironment)
                 }.build()
                 PreparedStmtQuery(fields, methodSpec)
             }
-        }.filterNotNull()
+        }
     }
 
     private fun createDeleteOrUpdateMethodBody(

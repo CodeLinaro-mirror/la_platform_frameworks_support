@@ -94,7 +94,7 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
 
         val newDependencies = mutableSetOf<PomDependency>()
         for (dependency in dependencies) {
-            newDependencies.addAll(mapDependency(dependency, context))
+            newDependencies.add(mapDependency(dependency, context))
         }
 
         if (newDependencies.isEmpty()) {
@@ -130,7 +130,7 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
         }
 
         val dependency = PomDependency(groupIdNode.text, artifactIdNode.text, version.text)
-        val newDependency = mapDependency(dependency, context).first()
+        val newDependency = mapDependency(dependency, context)
 
         if (newDependency != dependency) {
             groupIdNode.text = newDependency.groupId
@@ -142,15 +142,11 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
     private fun mapDependency(
             dependency: PomDependency,
             context: TransformationContext
-    ): Set<PomDependency> {
-        if (dependency.shouldSkipRewrite()) {
-            return emptySet()
-        }
-
+    ): PomDependency {
         val rule = context.config.pomRewriteRules.firstOrNull { it.matches(dependency) }
         if (rule != null) {
             // Replace with new dependencies
-            return rule.to.map { it.rewrite(dependency, context.versionsMap) }.toSet()
+            return rule.to.rewrite(dependency, context.versions)
         }
 
         val matchesPrefix = context.config.restrictToPackagePrefixesWithDots.any {
@@ -158,18 +154,14 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
         }
 
         if (matchesPrefix) {
-            if (context.useFallbackIfTypeIsMissing) {
-                Log.i(TAG, "No mapping found for '%s' - using identity",
-                        dependency.toStringNotation())
-            } else {
-                // Report error
-                Log.e(TAG, "No mapping found for '%s'", dependency.toStringNotation())
-                context.reportNoPackageMappingFoundFailure()
-            }
+            context.reportNoPackageMappingFoundFailure(
+                TAG,
+                dependency.toStringNotation(),
+                file.relativePath.toString())
         }
 
         // No rule to rewrite => keep it
-        return setOf(dependency)
+        return dependency
     }
 
     /**
@@ -189,7 +181,7 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
     fun logDocumentDetails() {
         Log.i(TAG, "POM file at: '%s'", file.relativePath)
         for ((groupId, artifactId, version) in dependencies) {
-            Log.d(TAG, "- Dep: %s:%s:%s", groupId, artifactId, version)
+            Log.v(TAG, "- Dep: %s:%s:%s", groupId, artifactId, version)
         }
     }
 }
