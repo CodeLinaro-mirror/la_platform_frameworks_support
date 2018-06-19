@@ -30,9 +30,11 @@ import android.content.Intent;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.test.InstrumentationRegistry;
+import android.support.test.filters.LargeTest;
 import android.support.test.filters.MediumTest;
 import android.support.test.runner.AndroidJUnit4;
 
+import androidx.work.Configuration;
 import androidx.work.Constraints;
 import androidx.work.DatabaseTest;
 import androidx.work.OneTimeWorkRequest;
@@ -80,6 +82,7 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     private Context mContext;
     private Scheduler mScheduler;
     private WorkManagerImpl mWorkManager;
+    private Configuration mConfiguration;
     private ExecutorService mExecutorService;
     private Processor mProcessor;
     private Processor mSpyProcessor;
@@ -107,10 +110,13 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
             }
         };
 
+        mConfiguration = new Configuration.Builder().build();
         when(mWorkManager.getWorkDatabase()).thenReturn(mDatabase);
+        when(mWorkManager.getConfiguration()).thenReturn(mConfiguration);
         mExecutorService = Executors.newSingleThreadExecutor();
         mProcessor = new Processor(
                 mContext,
+                mConfiguration,
                 mDatabase,
                 Collections.singletonList(mScheduler),
                 // simulate real world use-case
@@ -265,21 +271,19 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
                 .build();
 
         insertWork(work);
-        String workSpecId = work.getStringId();
         final Intent constraintChanged = CommandHandler.createConstraintsChangedIntent(mContext);
         mSpyDispatcher.postOnMainThread(
                 new SystemAlarmDispatcher.AddRunnable(mSpyDispatcher, constraintChanged, START_ID));
 
         mLatch.await(TEST_TIMEOUT, TimeUnit.SECONDS);
-
         assertThat(mLatch.getCount(), is(0L));
-        verify(mSpyProcessor, times(1)).startWork(workSpecId);
     }
 
     @Test
     public void testConstraintsChangedMarkedNotScheduled_withNoConstraints()
             throws InterruptedException {
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
+                .setScheduleRequestedAt(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
                 .setPeriodStartTime(System.currentTimeMillis(), TimeUnit.MILLISECONDS)
                 .build();
 
@@ -313,6 +317,7 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
     }
 
     @Test
+    @LargeTest
     public void testDelayMet_withUnMetConstraint() throws InterruptedException {
         when(mBatteryChargingTracker.getInitialState()).thenReturn(false);
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(TestWorker.class)
@@ -340,6 +345,7 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
                 IsIterableContainingInOrder.contains(
                         CommandHandler.ACTION_DELAY_MET,
                         CommandHandler.ACTION_STOP_WORK,
+                        CommandHandler.ACTION_EXECUTION_COMPLETED,
                         CommandHandler.ACTION_CONSTRAINTS_CHANGED));
 
         assertThat(workSpec.state, is(State.ENQUEUED));
@@ -372,6 +378,7 @@ public class SystemAlarmDispatcherTest extends DatabaseTest {
         assertThat(intentActions,
                 IsIterableContainingInOrder.contains(
                         CommandHandler.ACTION_DELAY_MET,
+                        CommandHandler.ACTION_EXECUTION_COMPLETED,
                         CommandHandler.ACTION_CONSTRAINTS_CHANGED));
 
         assertThat(workSpec.state, is(State.SUCCEEDED));

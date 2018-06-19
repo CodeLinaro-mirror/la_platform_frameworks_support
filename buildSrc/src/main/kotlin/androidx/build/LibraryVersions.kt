@@ -82,15 +82,15 @@ object LibraryVersions {
     /**
      * Version code for Navigation
      */
-    val NAVIGATION = Version("1.0.0-alpha01")
+    val NAVIGATION = Version("1.0.0-alpha02")
 
     /**
      * Version code for WorkManager
      */
-    val WORKMANAGER = Version("1.0.0-alpha01")
+    val WORKMANAGER = Version("1.0.0-alpha02")
 
     /**
      * Version code for Jetifier
      */
-    val JETIFIER = Version("1.0.0-alpha05")
+    val JETIFIER = Version("1.0.0-alpha06")
 }

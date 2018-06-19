@@ -26,6 +26,7 @@ import androidx.work.impl.WorkManagerImpl;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * WorkManager is a library used to enqueue work that is guaranteed to execute after its constraints
@@ -142,18 +143,18 @@ public abstract class WorkManager {
     /**
      * Enqueues one or more items for background processing.
      *
-     * @param workRequest One or more {@link WorkRequest} to enqueue
+     * @param workRequests One or more {@link WorkRequest} to enqueue
      */
-    public final void enqueue(@NonNull WorkRequest... workRequest) {
-        enqueue(Arrays.asList(workRequest));
+    public final void enqueue(@NonNull WorkRequest... workRequests) {
+        enqueue(Arrays.asList(workRequests));
     }
 
     /**
      * Enqueues one or more items for background processing.
      *
-     * @param baseWork One or more {@link WorkRequest} to enqueue
+     * @param workRequests One or more {@link WorkRequest} to enqueue
      */
-    public abstract void enqueue(@NonNull List<? extends WorkRequest> baseWork);
+    public abstract void enqueue(@NonNull List<? extends WorkRequest> workRequests);
 
     /**
      * Begins a chain of {@link OneTimeWorkRequest}, which can be enqueued together in the future
@@ -183,21 +184,21 @@ public abstract class WorkManager {
      * operation to be active.  If there is one pending, you can choose to let it run or replace it
      * with your new work.
      *
-     * The {@code name} uniquely identifies this set of work.
+     * The {@code uniqueWorkName} uniquely identifies this set of work.
      *
      * If this method determines that new work should be enqueued and run, all records of previous
-     * work with {@code name} will be pruned.  If this method determines that new work should NOT
-     * be run, then the entire chain will be considered a no-op.
+     * work with {@code uniqueWorkName} will be pruned.  If this method determines that new work
+     * should NOT be run, then the entire chain will be considered a no-op.
      *
      * @param uniqueWorkName A unique name which for this chain of work
-     * @param existingWorkPolicy An {@link ExistingWorkPolicy}.
+     * @param existingWorkPolicy An {@link ExistingWorkPolicy}
      * @param work One or more {@link OneTimeWorkRequest} to enqueue. {@code REPLACE} ensures that
-     *             if there is pending work labelled with {@code name}, it will be cancelled and the
-     *             new work will run. {@code KEEP} will run the new sequence of work
-     *             only if there is no pending work labelled with {@code name}.
+     *             if there is pending work labelled with {@code uniqueWorkName}, it will be
+     *             cancelled and the new work will run. {@code KEEP} will run the new sequence of
+     *             work only if there is no pending work labelled with {@code uniqueWorkName}.
      *             {@code APPEND} will create a new sequence of work if there is no
-     *             existing work with {@code name}; otherwise, {@code work} will be added as a
-     *             child of all leaf nodes labelled with {@code name}.
+     *             existing work with {@code uniqueWorkName}; otherwise, {@code work} will be added
+     *             as a child of all leaf nodes labelled with {@code uniqueWorkName}.
      * @return A {@link WorkContinuation} that allows further chaining
      */
     public final WorkContinuation beginUniqueWork(
@@ -213,28 +214,48 @@ public abstract class WorkManager {
      * operation to be active.  If there is one pending, you can choose to let it run or replace it
      * with your new work.
      *
-     * The {@code name} uniquely identifies this set of work.
+     * The {@code uniqueWorkName} uniquely identifies this set of work.
      *
      * If this method determines that new work should be enqueued and run, all records of previous
-     * work with {@code name} will be pruned.  If this method determines that new work should NOT be
-     * run, then the entire chain will be considered a no-op.
+     * work with {@code uniqueWorkName} will be pruned.  If this method determines that new work
+     * should NOT be run, then the entire chain will be considered a no-op.
      *
      * @param uniqueWorkName A unique name which for this chain of work
-     * @param existingWorkPolicy An {@link ExistingWorkPolicy}.
-     * @param work One or more {@link OneTimeWorkRequest} to enqueue. {@code REPLACE} ensures
-     *             that if there is pending work labelled with {@code name}, it will be cancelled
-     *             and the new work will run.
-     *             {@code KEEP} will run the new sequence of work only if there is no
-     *             pending work labelled with {@code name}.
-     *             {@code APPEND} will create a new sequence of work if there is no existing work
-     *             with {@code name}; otherwise, {@code work} will be added as a child of all
-     *             leaf nodes labelled with {@code name}.
+     * @param existingWorkPolicy An {@link ExistingWorkPolicy}
+     * @param work One or more {@link OneTimeWorkRequest} to enqueue. {@code REPLACE} ensures that
+     *             if there is pending work labelled with {@code uniqueWorkName}, it will be
+     *             cancelled and the new work will run. {@code KEEP} will run the new sequence of
+     *             work only if there is no pending work labelled with {@code uniqueWorkName}.
+     *             {@code APPEND} will create a new sequence of work if there is no
+     *             existing work with {@code uniqueWorkName}; otherwise, {@code work} will be added
+     *             as a child of all leaf nodes labelled with {@code uniqueWorkName}.
      * @return A {@link WorkContinuation} that allows further chaining
      */
     public abstract WorkContinuation beginUniqueWork(
             @NonNull String uniqueWorkName,
             @NonNull ExistingWorkPolicy existingWorkPolicy,
             @NonNull List<OneTimeWorkRequest> work);
+
+    /**
+     * This method allows you to enqueue a uniquely-named {@link PeriodicWorkRequest}, where only
+     * one PeriodicWorkRequest of a particular name can be active at a time.  For example, you may
+     * only want one sync operation to be active.  If there is one pending, you can choose to let it
+     * run or replace it with your new work.
+     *
+     * The {@code uniqueWorkName} uniquely identifies this PeriodicWorkRequest.
+     *
+     * @param uniqueWorkName A unique name which for this operation
+     * @param existingPeriodicWorkPolicy An {@link ExistingPeriodicWorkPolicy}
+     * @param periodicWork A {@link PeriodicWorkRequest} to enqueue. {@code REPLACE} ensures that if
+     *                     there is pending work labelled with {@code uniqueWorkName}, it will be
+     *                     cancelled and the new work will run. {@code KEEP} will run the new
+     *                     PeriodicWorkRequest only if there is no pending work labelled with
+     *                     {@code uniqueWorkName}.
+     */
+    public abstract void enqueueUniquePeriodicWork(
+            @NonNull String uniqueWorkName,
+            @NonNull ExistingPeriodicWorkPolicy existingPeriodicWorkPolicy,
+            @NonNull PeriodicWorkRequest periodicWork);
 
     /**
      * Cancels work with the given id if it isn't finished.  Note that cancellation is a best-effort
@@ -259,6 +280,36 @@ public abstract class WorkManager {
      * @param uniqueWorkName The unique name used to identify the chain of work
      */
     public abstract void cancelUniqueWork(@NonNull String uniqueWorkName);
+
+    /**
+     * Cancels all unfinished work.  <b>Use this method with extreme caution!</b>  By invoking it,
+     * you will potentially affect other modules or libraries in your codebase.  It is strongly
+     * recommended that you use one of the other cancellation methods at your disposal.
+     */
+    public abstract void cancelAllWork();
+
+    /**
+     * Prunes all eligible finished work from the internal database.  Eligible work must be finished
+     * ({@link State#SUCCEEDED}, {@link State#FAILED}, or {@link State#CANCELLED}), with zero
+     * unfinished dependents.
+     * <p>
+     * <b>Use this method with caution</b>; by invoking it, you (and any modules and libraries in
+     * your codebase) will no longer be able to observe the {@link WorkStatus} of the pruned work.
+     * You do not normally need to call this method - WorkManager takes care to auto-prune its work
+     * after a sane period of time.  This method also ignores the
+     * {@link OneTimeWorkRequest.Builder#keepResultsForAtLeast(long, TimeUnit)} policy.
+     */
+    public abstract void pruneWork();
+
+    /**
+     * Gets a {@link LiveData} of the last time all work was cancelled.  This method is intended for
+     * use by library and module developers who have dependent data in their own repository that
+     * must be updated or deleted in case someone cancels their work without their prior knowledge.
+     *
+     * @return A {@link LiveData} of the timestamp in milliseconds when method that cancelled all
+     *         work was last invoked
+     */
+    public abstract LiveData<Long> getLastCancelAllTimeMillis();
 
     /**
      * Gets a {@link LiveData} of the {@link WorkStatus} for a given work id.

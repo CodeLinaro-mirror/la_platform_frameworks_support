@@ -19,6 +19,7 @@ package androidx.work;
 import static androidx.work.State.BLOCKED;
 import static androidx.work.State.FAILED;
 import static androidx.work.State.SUCCEEDED;
+import static androidx.work.impl.Scheduler.MAX_SCHEDULER_LIMIT;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -55,16 +56,24 @@ public class WorkSpecDaoTest extends DatabaseTest {
                 .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
                 .setInitialState(SUCCEEDED)
                 .build();
+        OneTimeWorkRequest scheduled = new OneTimeWorkRequest.Builder(TestWorker.class)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .build();
         OneTimeWorkRequest enqueued = new OneTimeWorkRequest.Builder(TestWorker.class)
                 .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
                 .build();
 
         insertWork(work);
         insertWork(succeeded);
+        insertWork(scheduled);
         insertWork(enqueued);
 
         WorkSpecDao workSpecDao = mDatabase.workSpecDao();
-        List<WorkSpec> eligibleWorkSpecs = workSpecDao.getEligibleWorkForScheduling();
+        // Treat the scheduled request as previously scheduled
+        workSpecDao.markWorkSpecScheduled(scheduled.getStringId(), System.currentTimeMillis());
+        List<WorkSpec> eligibleWorkSpecs =
+                workSpecDao.getEligibleWorkForScheduling(MAX_SCHEDULER_LIMIT);
+
         assertThat(eligibleWorkSpecs.size(), equalTo(2));
         assertThat(eligibleWorkSpecs,
                 containsInAnyOrder(work.getWorkSpec(), enqueued.getWorkSpec()));
@@ -77,7 +86,6 @@ public class WorkSpecDaoTest extends DatabaseTest {
 
         long startTime = System.currentTimeMillis();
         OneTimeWorkRequest enqueued = new OneTimeWorkRequest.Builder(TestWorker.class)
-                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
                 .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
                 .build();
         OneTimeWorkRequest succeeded = new OneTimeWorkRequest.Builder(TestWorker.class)
@@ -92,15 +100,45 @@ public class WorkSpecDaoTest extends DatabaseTest {
                 .build();
 
         insertWork(enqueued);
-        workSpecDao.markWorkSpecScheduled(enqueued.getStringId(), startTime);
-
         insertWork(succeeded);
         insertWork(failed);
 
-        List<WorkSpec> eligibleWorkSpecs = workSpecDao.getEligibleWorkForScheduling();
+        List<WorkSpec> eligibleWorkSpecs =
+                workSpecDao.getEligibleWorkForScheduling(MAX_SCHEDULER_LIMIT);
         assertThat(eligibleWorkSpecs, notNullValue());
         assertThat(eligibleWorkSpecs.size(), is(1));
         assertThat(eligibleWorkSpecs, containsInAnyOrder(enqueued.getWorkSpec()));
+    }
+
+    @Test
+    @SmallTest
+    public void testAlreadyScheduledWorkIsNotRescheduled() {
+        WorkSpecDao workSpecDao = mDatabase.workSpecDao();
+
+        long startTime = System.currentTimeMillis();
+        OneTimeWorkRequest enqueued = new OneTimeWorkRequest.Builder(TestWorker.class)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS) // already scheduled
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .build();
+        OneTimeWorkRequest succeeded = new OneTimeWorkRequest.Builder(TestWorker.class)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setInitialState(SUCCEEDED)
+                .build();
+        OneTimeWorkRequest failed = new OneTimeWorkRequest.Builder(TestWorker.class)
+                .setScheduleRequestedAt(startTime, TimeUnit.MILLISECONDS)
+                .setPeriodStartTime(startTime, TimeUnit.MILLISECONDS)
+                .setInitialState(FAILED)
+                .build();
+
+        insertWork(enqueued);
+        insertWork(succeeded);
+        insertWork(failed);
+
+        List<WorkSpec> eligibleWorkSpecs =
+                workSpecDao.getEligibleWorkForScheduling(MAX_SCHEDULER_LIMIT);
+        assertThat(eligibleWorkSpecs, notNullValue());
+        assertThat(eligibleWorkSpecs.size(), is(0));
     }
 
     @Test
@@ -138,7 +176,8 @@ public class WorkSpecDaoTest extends DatabaseTest {
 
         workSpecDao.resetScheduledState();
 
-        List<WorkSpec> eligibleWorkSpecs = workSpecDao.getEligibleWorkForScheduling();
+        List<WorkSpec> eligibleWorkSpecs =
+                workSpecDao.getEligibleWorkForScheduling(MAX_SCHEDULER_LIMIT);
         assertThat(eligibleWorkSpecs.size(), is(1));
         // Not using contains in any order as the scheduleRequestedAt changes post reset.
         assertThat(eligibleWorkSpecs.get(0).id, is(enqueued.getStringId()));

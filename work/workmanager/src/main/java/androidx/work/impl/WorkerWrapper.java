@@ -30,6 +30,7 @@ import android.support.annotation.VisibleForTesting;
 import android.support.annotation.WorkerThread;
 import android.util.Log;
 
+import androidx.work.Configuration;
 import androidx.work.Data;
 import androidx.work.InputMerger;
 import androidx.work.State;
@@ -37,11 +38,13 @@ import androidx.work.Worker;
 import androidx.work.impl.model.DependencyDao;
 import androidx.work.impl.model.WorkSpec;
 import androidx.work.impl.model.WorkSpecDao;
+import androidx.work.impl.model.WorkTagDao;
 import androidx.work.impl.utils.taskexecutor.WorkManagerTaskExecutor;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * A runnable that looks up the {@link WorkSpec} from the database for a given id, instantiates
@@ -57,13 +60,15 @@ public class WorkerWrapper implements Runnable {
     private String mWorkSpecId;
     private ExecutionListener mListener;
     private List<Scheduler> mSchedulers;
-    private RuntimeExtras mRuntimeExtras;
+    private Extras.RuntimeExtras mRuntimeExtras;
     private WorkSpec mWorkSpec;
     Worker mWorker;
 
+    private Configuration mConfiguration;
     private WorkDatabase mWorkDatabase;
     private WorkSpecDao mWorkSpecDao;
     private DependencyDao mDependencyDao;
+    private WorkTagDao mWorkTagDao;
 
     private volatile boolean mInterrupted;
 
@@ -75,9 +80,11 @@ public class WorkerWrapper implements Runnable {
         mRuntimeExtras = builder.mRuntimeExtras;
         mWorker = builder.mWorker;
 
+        mConfiguration = builder.mConfiguration;
         mWorkDatabase = builder.mWorkDatabase;
         mWorkSpecDao = mWorkDatabase.workSpecDao();
         mDependencyDao = mWorkDatabase.dependencyDao();
+        mWorkTagDao = mWorkDatabase.workTagDao();
     }
 
     @WorkerThread
@@ -120,10 +127,16 @@ public class WorkerWrapper implements Runnable {
             input = inputMerger.merge(inputs);
         }
 
+        Extras extras = new Extras(
+                input,
+                mWorkTagDao.getTagsForWorkSpecId(mWorkSpecId),
+                mRuntimeExtras,
+                mWorkSpec.runAttemptCount);
+
         // Not always creating a worker here, as the WorkerWrapper.Builder can set a worker override
         // in test mode.
         if (mWorker == null) {
-            mWorker = workerFromWorkSpec(mAppContext, mWorkSpec, input, mRuntimeExtras);
+            mWorker = workerFromWorkSpec(mAppContext, mWorkSpec, extras);
         }
 
         if (mWorker == null) {
@@ -139,24 +152,26 @@ public class WorkerWrapper implements Runnable {
                 return;
             }
 
-            Worker.WorkerResult result;
+            Worker.Result result;
             try {
                 result = mWorker.doWork();
             } catch (Exception | Error e) {
-                result = Worker.WorkerResult.FAILURE;
+                result = Worker.Result.FAILURE;
             }
 
             try {
                 mWorkDatabase.beginTransaction();
                 if (!tryCheckForInterruptionAndNotify()) {
                     State state = mWorkSpecDao.getState(mWorkSpecId);
-                    if (state == RUNNING) {
-                        handleResult(result);
-                    } else if (state == null || !state.isFinished()) {
+                    if (state == null) {
                         // state can be null here with a REPLACE on beginUniqueWork().
                         // Treat it as a failure, and rescheduleAndNotify() will
                         // turn into a no-op. We still need to notify potential observers
                         // holding on to wake locks on our behalf.
+                        notifyListener(false, false);
+                    } else if (state == RUNNING) {
+                        handleResult(result);
+                    } else if (!state.isFinished()) {
                         rescheduleAndNotify();
                     }
                     mWorkDatabase.setTransactionSuccessful();
@@ -173,8 +188,12 @@ public class WorkerWrapper implements Runnable {
      * @hide
      */
     @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-    public void interrupt() {
+    public void interrupt(boolean cancelled) {
         mInterrupted = true;
+        // Worker can be null if run() hasn't been called yet.
+        if (mWorker != null) {
+            mWorker.stop(cancelled);
+        }
     }
 
     private void notifyIncorrectStatus() {
@@ -194,7 +213,13 @@ public class WorkerWrapper implements Runnable {
         if (mInterrupted) {
             Log.d(TAG, String.format("Work interrupted for %s", mWorkSpecId));
             State currentState = mWorkSpecDao.getState(mWorkSpecId);
-            notifyListener(currentState == SUCCEEDED, !currentState.isFinished());
+            if (currentState == null) {
+                // This can happen because of a beginUniqueWork(..., REPLACE, ...).  Notify the
+                // listeners so we can clean up any wake locks, etc.
+                notifyListener(false, false);
+            } else {
+                notifyListener(currentState == SUCCEEDED, !currentState.isFinished());
+            }
             return true;
         }
         return false;
@@ -212,7 +237,7 @@ public class WorkerWrapper implements Runnable {
         });
     }
 
-    private void handleResult(Worker.WorkerResult result) {
+    private void handleResult(Worker.Result result) {
         switch (result) {
             case SUCCESS: {
                 Log.d(TAG, String.format("Worker result SUCCESS for %s", mWorkSpecId));
@@ -278,7 +303,7 @@ public class WorkerWrapper implements Runnable {
             notifyListener(false, false);
         }
 
-        Schedulers.schedule(mWorkDatabase, mSchedulers);
+        Schedulers.schedule(mConfiguration, mWorkDatabase, mSchedulers);
     }
 
     private void recursivelyFailWorkAndDependents(String workSpecId) {
@@ -348,21 +373,19 @@ public class WorkerWrapper implements Runnable {
         }
 
         // This takes of scheduling the dependent workers as they have been marked ENQUEUED.
-        Schedulers.schedule(mWorkDatabase, mSchedulers);
+        Schedulers.schedule(mConfiguration, mWorkDatabase, mSchedulers);
     }
 
     static Worker workerFromWorkSpec(@NonNull Context context,
             @NonNull WorkSpec workSpec,
-            @NonNull Data inputData,
-            @Nullable RuntimeExtras runtimeExtras) {
+            @NonNull Extras extras) {
         String workerClassName = workSpec.workerClassName;
-        String workSpecId = workSpec.id;
+        UUID workSpecId = UUID.fromString(workSpec.id);
         return workerFromClassName(
                 context,
                 workerClassName,
                 workSpecId,
-                inputData,
-                runtimeExtras);
+                extras);
     }
 
     /**
@@ -371,7 +394,7 @@ public class WorkerWrapper implements Runnable {
      * @param context         The application {@link Context}
      * @param workerClassName The fully qualified class name for the {@link Worker}
      * @param workSpecId      The {@link WorkSpec} identifier
-     * @param inputData       The {@link Data} for the worker
+     * @param extras          The {@link Extras} for the worker
      * @return The instance of {@link Worker}
      *
      * @hide
@@ -381,9 +404,8 @@ public class WorkerWrapper implements Runnable {
     public static Worker workerFromClassName(
             @NonNull Context context,
             @NonNull String workerClassName,
-            @NonNull String workSpecId,
-            @NonNull Data inputData,
-            @Nullable RuntimeExtras runtimeExtras) {
+            @NonNull UUID workSpecId,
+            @NonNull Extras extras) {
         Context appContext = context.getApplicationContext();
         try {
             Class<?> clazz = Class.forName(workerClassName);
@@ -391,16 +413,14 @@ public class WorkerWrapper implements Runnable {
             Method internalInitMethod = Worker.class.getDeclaredMethod(
                     "internalInit",
                     Context.class,
-                    String.class,
-                    Data.class,
-                    RuntimeExtras.class);
+                    UUID.class,
+                    Extras.class);
             internalInitMethod.setAccessible(true);
             internalInitMethod.invoke(
                     worker,
                     appContext,
                     workSpecId,
-                    inputData,
-                    runtimeExtras);
+                    extras);
             return worker;
         } catch (Exception e) {
             Log.e(TAG, "Trouble instantiating " + workerClassName, e);
@@ -417,16 +437,19 @@ public class WorkerWrapper implements Runnable {
         private Context mAppContext;
         @Nullable
         private Worker mWorker;
+        private Configuration mConfiguration;
         private WorkDatabase mWorkDatabase;
         private String mWorkSpecId;
         private ExecutionListener mListener;
         private List<Scheduler> mSchedulers;
-        private RuntimeExtras mRuntimeExtras;
+        private Extras.RuntimeExtras mRuntimeExtras;
 
         public Builder(@NonNull Context context,
+                @NonNull Configuration configuration,
                 @NonNull WorkDatabase database,
                 @NonNull String workSpecId) {
             mAppContext = context.getApplicationContext();
+            mConfiguration = configuration;
             mWorkDatabase = database;
             mWorkSpecId = workSpecId;
         }
@@ -451,10 +474,10 @@ public class WorkerWrapper implements Runnable {
         }
 
         /**
-         * @param runtimeExtras The {@link RuntimeExtras} for the {@link Worker}.
+         * @param runtimeExtras The {@link Extras.RuntimeExtras} for the {@link Worker}.
          * @return The instance of {@link Builder} for chaining.
          */
-        public Builder withRuntimeExtras(RuntimeExtras runtimeExtras) {
+        public Builder withRuntimeExtras(Extras.RuntimeExtras runtimeExtras) {
             mRuntimeExtras = runtimeExtras;
             return this;
         }

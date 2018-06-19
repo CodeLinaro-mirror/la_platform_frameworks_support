@@ -29,7 +29,7 @@ import androidx.work.Worker;
  *  A {@link Worker} that shows a given Toast.
  */
 public class ToastWorker extends Worker {
-    private static final String ARG_MESSAGE = "message";
+    static final String ARG_MESSAGE = "message";
 
     /**
      * Create a {@link OneTimeWorkRequest.Builder} with the given message.
@@ -43,7 +43,7 @@ public class ToastWorker extends Worker {
     }
 
     @Override
-    public @NonNull WorkerResult doWork() {
+    public @NonNull Result doWork() {
         Data input = getInputData();
         final String message = input.getString(ARG_MESSAGE, "completed!");
         new Handler(Looper.getMainLooper()).post(new Runnable() {
@@ -53,6 +53,6 @@ public class ToastWorker extends Worker {
                 Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show();
             }
         });
-        return WorkerResult.SUCCESS;
+        return Result.SUCCESS;
     }
 }

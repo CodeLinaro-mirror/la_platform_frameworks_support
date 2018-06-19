@@ -25,6 +25,7 @@ import android.os.Build;
 import android.os.PersistableBundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
+import android.support.annotation.RestrictTo;
 import android.support.annotation.VisibleForTesting;
 import android.util.Log;
 
@@ -34,11 +35,13 @@ import androidx.work.ContentUriTriggers;
 import androidx.work.NetworkType;
 import androidx.work.impl.WorkManagerImpl;
 import androidx.work.impl.model.WorkSpec;
-import androidx.work.impl.utils.IdGenerator;
 
 /**
  * Converts a {@link WorkSpec} into a JobInfo.
+ *
+ * @hide
  */
+@RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
 @RequiresApi(api = WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL)
 class SystemJobInfoConverter {
     private static final String TAG = "SystemJobInfoConverter";
@@ -47,22 +50,11 @@ class SystemJobInfoConverter {
     static final String EXTRA_IS_PERIODIC = "EXTRA_IS_PERIODIC";
 
     private final ComponentName mWorkServiceComponent;
-    private final IdGenerator mIdGenerator;
-
-    /**
-     * Constructs a {@link IdGenerator}.
-     *
-     * @param context A non-null {@link Context}.
-     */
-    SystemJobInfoConverter(@NonNull Context context) {
-        this(context, new IdGenerator(context));
-    }
 
     @VisibleForTesting(otherwise = PACKAGE_PRIVATE)
-    SystemJobInfoConverter(@NonNull Context context, IdGenerator idGenerator) {
+    SystemJobInfoConverter(@NonNull Context context) {
         Context appContext = context.getApplicationContext();
         mWorkServiceComponent = new ComponentName(appContext, SystemJobService.class);
-        mIdGenerator = idGenerator;
     }
 
     /**
@@ -71,11 +63,11 @@ class SystemJobInfoConverter {
      * Note: All {@link JobInfo} are set to persist on reboot.
      *
      * @param workSpec The {@link WorkSpec} to convert
+     * @param jobId The {@code jobId} to use. This is useful when de-duping jobs on reschedule.
      * @return The {@link JobInfo} representing the same information as the {@link WorkSpec}
      */
-    JobInfo convert(WorkSpec workSpec) {
+    JobInfo convert(WorkSpec workSpec, int jobId) {
         Constraints constraints = workSpec.constraints;
-        int jobId = mIdGenerator.nextJobSchedulerId();
         // TODO(janclarin): Support newer required network types if unsupported by API version.
         int jobInfoNetworkType = convertNetworkType(constraints.getRequiredNetworkType());
         PersistableBundle extras = new PersistableBundle();
@@ -113,12 +105,11 @@ class SystemJobInfoConverter {
             for (ContentUriTriggers.Trigger trigger : constraints.getContentUriTriggers()) {
                 builder.addTriggerContentUri(convertContentUriTrigger(trigger));
             }
-        } else {
-            // Jobs with Content Uri Triggers cannot be persisted
-            builder.setPersisted(true);
         }
 
-        // TODO(janclarin): Support requires[Battery|Storage]NotLow for versions older than 26.
+        // We don't want to persist these jobs because we reschedule these jobs on BOOT_COMPLETED.
+        // That way ForceStopRunnable correctly reschedules Jobs when necessary.
+        builder.setPersisted(false);
         if (Build.VERSION.SDK_INT >= 26) {
             builder.setRequiresBatteryNotLow(constraints.requiresBatteryNotLow());
             builder.setRequiresStorageNotLow(constraints.requiresStorageNotLow());
