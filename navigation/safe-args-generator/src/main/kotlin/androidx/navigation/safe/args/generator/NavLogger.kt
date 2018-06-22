@@ -14,19 +14,14 @@
  * limitations under the License.
  */
 
-package androidx.work.impl;
+package androidx.navigation.safe.args.generator
 
-import android.net.Uri;
-import android.support.annotation.RestrictTo;
+class NavLogger {
+    private var messages: MutableList<ErrorMessage> = mutableListOf()
 
-/**
- * Extra runtime information for Workers.
- *
- * @hide
- */
-@RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-public class RuntimeExtras {
+    fun error(message: String, position: XmlPosition) {
+        messages.add(ErrorMessage(position.name, position.line, position.column, message))
+    }
 
-    public String[] triggeredContentAuthorities;
-    public Uri[] triggeredContentUris;
+    fun allMessages(): List<ErrorMessage> = messages
 }

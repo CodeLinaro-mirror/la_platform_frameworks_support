@@ -115,7 +115,8 @@ public class WorkContinuationImpl extends WorkContinuation
                 null);
     }
 
-    WorkContinuationImpl(@NonNull WorkManagerImpl workManagerImpl,
+    WorkContinuationImpl(
+            @NonNull WorkManagerImpl workManagerImpl,
             String name,
             ExistingWorkPolicy existingWorkPolicy,
             @NonNull List<? extends WorkRequest> work) {
@@ -160,6 +161,14 @@ public class WorkContinuationImpl extends WorkContinuation
     @Override
     public LiveData<List<WorkStatus>> getStatuses() {
         return mWorkManagerImpl.getStatusesById(mAllIds);
+    }
+
+    @Override
+    public List<WorkStatus> getStatusesSync() {
+        if (Looper.getMainLooper().getThread() == Thread.currentThread()) {
+            throw new IllegalStateException("Cannot getStatusesSync on main thread!");
+        }
+        return mWorkManagerImpl.getStatusesByIdSync(mAllIds);
     }
 
     @Override

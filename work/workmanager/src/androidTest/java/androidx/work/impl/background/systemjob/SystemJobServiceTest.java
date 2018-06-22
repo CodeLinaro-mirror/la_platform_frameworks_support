@@ -30,7 +30,9 @@ import android.app.job.JobParameters;
 import android.arch.core.executor.ArchTaskExecutor;
 import android.arch.core.executor.TaskExecutor;
 import android.content.Context;
+import android.net.Network;
 import android.net.Uri;
+import android.os.Build;
 import android.os.PersistableBundle;
 import android.support.annotation.NonNull;
 import android.support.test.InstrumentationRegistry;
@@ -72,6 +74,11 @@ public class SystemJobServiceTest extends WorkManagerTest {
 
     @Before
     public void setUp() {
+        // TODO: Remove after we figure out why these tests execute on API 17 emulators.
+        if (Build.VERSION.SDK_INT < WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL) {
+            return;
+        }
+
         ArchTaskExecutor.getInstance().setDelegate(new TaskExecutor() {
             @Override
             public void executeOnDiskIO(@NonNull Runnable runnable) {
@@ -91,7 +98,7 @@ public class SystemJobServiceTest extends WorkManagerTest {
 
         Context context = InstrumentationRegistry.getTargetContext();
         Configuration configuration = new Configuration.Builder()
-                .withExecutor(Executors.newSingleThreadExecutor())
+                .setExecutor(Executors.newSingleThreadExecutor())
                 .build();
         mWorkManagerImpl = new WorkManagerImpl(context, configuration);
         WorkManagerImpl.setDelegate(mWorkManagerImpl);
@@ -103,6 +110,11 @@ public class SystemJobServiceTest extends WorkManagerTest {
 
     @After
     public void tearDown() {
+        // TODO: Remove after we figure out why these tests execute on API 17 emulators.
+        if (Build.VERSION.SDK_INT < WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL) {
+            return;
+        }
+
         mSystemJobServiceSpy.onDestroy();
         WorkManagerImpl.setDelegate(null);
         ArchTaskExecutor.getInstance().setDelegate(null);
@@ -111,6 +123,11 @@ public class SystemJobServiceTest extends WorkManagerTest {
     @Test
     @LargeTest
     public void testOnStopJob_ResetsWorkStatus() throws InterruptedException {
+        // TODO: Remove after we figure out why these tests execute on API 17 emulators.
+        if (Build.VERSION.SDK_INT < WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL) {
+            return;
+        }
+
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(InfiniteTestWorker.class).build();
         insertWork(work);
 
@@ -132,6 +149,11 @@ public class SystemJobServiceTest extends WorkManagerTest {
     @Test
     @SmallTest
     public void testOnStopJob_ReschedulesWhenNotCancelled() {
+        // TODO: Remove after we figure out why these tests execute on API 17 emulators.
+        if (Build.VERSION.SDK_INT < WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL) {
+            return;
+        }
+
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(InfiniteTestWorker.class).build();
         insertWork(work);
 
@@ -143,6 +165,11 @@ public class SystemJobServiceTest extends WorkManagerTest {
     @Test
     @SmallTest
     public void testOnStopJob_DoesNotRescheduleWhenCancelled() {
+        // TODO: Remove after we figure out why these tests execute on API 17 emulators.
+        if (Build.VERSION.SDK_INT < WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL) {
+            return;
+        }
+
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(InfiniteTestWorker.class).build();
         insertWork(work);
 
@@ -155,6 +182,11 @@ public class SystemJobServiceTest extends WorkManagerTest {
     @Test
     @SmallTest
     public void testStartJob_ReturnsFalseWithDuplicateJob() {
+        // TODO: Remove after we figure out why these tests execute on API 17 emulators.
+        if (Build.VERSION.SDK_INT < WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL) {
+            return;
+        }
+
         OneTimeWorkRequest work = new OneTimeWorkRequest.Builder(InfiniteTestWorker.class).build();
         insertWork(work);
 
@@ -167,6 +199,11 @@ public class SystemJobServiceTest extends WorkManagerTest {
     @LargeTest
     @SdkSuppress(minSdkVersion = 24)
     public void testStartJob_PassesContentUriTriggers() throws InterruptedException {
+        // TODO: Remove after we figure out why these tests execute on API 17 emulators.
+        if (Build.VERSION.SDK_INT < WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL) {
+            return;
+        }
+
         OneTimeWorkRequest work =
                 new OneTimeWorkRequest.Builder(ContentUriTriggerLoggingWorker.class).build();
         insertWork(work);
@@ -196,6 +233,27 @@ public class SystemJobServiceTest extends WorkManagerTest {
         assertThat(ContentUriTriggerLoggingWorker.sTriggeredContentUris, is(testContentUris));
     }
 
+    @Test
+    @LargeTest
+    @SdkSuppress(minSdkVersion = 28)
+    public void testStartJob_passesNetwork() throws InterruptedException {
+        WorkRequest work = new OneTimeWorkRequest.Builder(NetworkLoggingWorker.class).build();
+        insertWork(work);
+
+        Network mockNetwork = mock(Network.class);
+
+        JobParameters mockParams = createMockJobParameters(work.getStringId());
+        when(mockParams.getNetwork()).thenReturn(mockNetwork);
+
+        assertThat(NetworkLoggingWorker.sTimesUpdated, is(0));
+        assertThat(mSystemJobServiceSpy.onStartJob(mockParams), is(true));
+
+        Thread.sleep(1000L);
+
+        assertThat(NetworkLoggingWorker.sTimesUpdated, is(1));
+        assertThat(NetworkLoggingWorker.sNetwork, is(mockNetwork));
+    }
+
     private JobParameters createMockJobParameters(String id) {
         JobParameters jobParameters = mock(JobParameters.class);
 
@@ -217,13 +275,28 @@ public class SystemJobServiceTest extends WorkManagerTest {
         static Uri[] sTriggeredContentUris;
 
         @Override
-        public WorkerResult doWork() {
+        public @NonNull Result doWork() {
             synchronized (ContentUriTriggerLoggingWorker.class) {
                 ++sTimesUpdated;
                 sTriggeredContentAuthorities = getTriggeredContentAuthorities();
                 sTriggeredContentUris = getTriggeredContentUris();
             }
-            return WorkerResult.SUCCESS;
+            return Result.SUCCESS;
+        }
+    }
+
+    public static class NetworkLoggingWorker extends Worker {
+
+        static int sTimesUpdated = 0;
+        static Network sNetwork;
+
+        @Override
+        public @NonNull Result doWork() {
+            synchronized (NetworkLoggingWorker.class) {
+                ++sTimesUpdated;
+                sNetwork = getNetwork();
+            }
+            return Result.SUCCESS;
         }
     }
 }

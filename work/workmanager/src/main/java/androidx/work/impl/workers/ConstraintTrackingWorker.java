@@ -63,11 +63,11 @@ public class ConstraintTrackingWorker extends Worker implements WorkConstraintsC
     }
 
     @Override
-    public @NonNull WorkerResult doWork() {
+    public @NonNull Result doWork() {
         String className = getInputData().getString(ARGUMENT_CLASS_NAME, null);
         if (TextUtils.isEmpty(className)) {
             Log.d(TAG, "No worker to delegate to.");
-            return WorkerResult.FAILURE;
+            return Result.FAILURE;
         }
         // Instantiate the delegated worker. Use the same workSpecId, and the same Data
         // as this Worker's Data are a superset of the delegate's Worker's Data.
@@ -75,20 +75,19 @@ public class ConstraintTrackingWorker extends Worker implements WorkConstraintsC
                 getApplicationContext(),
                 className,
                 getId(),
-                getInputData(),
-                getRuntimeExtras());
+                getExtras());
 
         if (mDelegate == null) {
             Log.d(TAG, "No worker to delegate to.");
-            return WorkerResult.FAILURE;
+            return Result.FAILURE;
         }
 
         WorkDatabase workDatabase = getWorkDatabase();
 
         // We need to know what the real constraints are for the delegate.
-        WorkSpec workSpec = workDatabase.workSpecDao().getWorkSpec(getId());
+        WorkSpec workSpec = workDatabase.workSpecDao().getWorkSpec(getId().toString());
         if (workSpec == null) {
-            return WorkerResult.FAILURE;
+            return Result.FAILURE;
         }
         WorkConstraintsTracker workConstraintsTracker =
                 new WorkConstraintsTracker(getApplicationContext(), this);
@@ -96,17 +95,17 @@ public class ConstraintTrackingWorker extends Worker implements WorkConstraintsC
         // Start tracking
         workConstraintsTracker.replace(Collections.singletonList(workSpec));
 
-        if (workConstraintsTracker.areAllConstraintsMet(getId())) {
+        if (workConstraintsTracker.areAllConstraintsMet(getId().toString())) {
             Log.d(TAG, String.format("Constraints met for delegate %s", className));
 
             // Wrapping the call to mDelegate#doWork() in a try catch, because
             // changes in constraints can cause the worker to throw RuntimeExceptions, and
             // that should cause a retry.
             try {
-                WorkerResult result = mDelegate.doWork();
+                Result result = mDelegate.doWork();
                 synchronized (mLock) {
                     if (mAreConstraintsUnmet) {
-                        return WorkerResult.RETRY;
+                        return Result.RETRY;
                     } else {
                         setOutputData(mDelegate.getOutputData());
                         return result;
@@ -118,16 +117,16 @@ public class ConstraintTrackingWorker extends Worker implements WorkConstraintsC
                 synchronized (mLock) {
                     if (mAreConstraintsUnmet) {
                         Log.d(TAG, "Constraints were unmet, Retrying.");
-                        return WorkerResult.RETRY;
+                        return Result.RETRY;
                     } else {
-                        return WorkerResult.FAILURE;
+                        return Result.FAILURE;
                     }
                 }
             }
         } else {
             Log.d(TAG, String.format(
                     "Constraints not met for delegate %s. Requesting retry.", className));
-            return WorkerResult.RETRY;
+            return Result.RETRY;
         }
     }
 

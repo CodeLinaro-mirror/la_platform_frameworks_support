@@ -26,8 +26,10 @@ import android.support.annotation.RestrictTo;
 import android.support.annotation.WorkerThread;
 
 import androidx.work.Configuration;
+import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.OneTimeWorkRequest;
+import androidx.work.PeriodicWorkRequest;
 import androidx.work.R;
 import androidx.work.SynchronousWorkManager;
 import androidx.work.WorkContinuation;
@@ -40,6 +42,8 @@ import androidx.work.impl.model.WorkSpecDao;
 import androidx.work.impl.utils.CancelWorkRunnable;
 import androidx.work.impl.utils.ForceStopRunnable;
 import androidx.work.impl.utils.LiveDataUtils;
+import androidx.work.impl.utils.Preferences;
+import androidx.work.impl.utils.PruneWorkRunnable;
 import androidx.work.impl.utils.StartWorkRunnable;
 import androidx.work.impl.utils.StopWorkRunnable;
 import androidx.work.impl.utils.taskexecutor.TaskExecutor;
@@ -62,10 +66,12 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
     public static final int MIN_JOB_SCHEDULER_API_LEVEL = 23;
 
     private Context mContext;
+    private Configuration mConfiguration;
     private WorkDatabase mWorkDatabase;
     private TaskExecutor mTaskExecutor;
     private List<Scheduler> mSchedulers;
     private Processor mProcessor;
+    private Preferences mPreferences;
 
     private static WorkManagerImpl sDelegatedInstance = null;
     private static WorkManagerImpl sDefaultInstance = null;
@@ -156,16 +162,28 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
 
         context = context.getApplicationContext();
         mContext = context;
+        mConfiguration = configuration;
         mWorkDatabase = WorkDatabase.create(context, useTestDatabase);
         mTaskExecutor = WorkManagerTaskExecutor.getInstance();
         mProcessor = new Processor(
                 context,
+                mConfiguration,
                 mWorkDatabase,
                 getSchedulers(),
                 configuration.getExecutor());
+        mPreferences = new Preferences(mContext);
 
         // Checks for app force stops.
         mTaskExecutor.executeOnBackgroundThread(new ForceStopRunnable(context, this));
+    }
+
+    /**
+     * @return The application {@link Context} associated with this WorkManager.
+     * @hide
+     */
+    @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+    public Context getApplicationContext() {
+        return mContext;
     }
 
     /**
@@ -178,6 +196,16 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
     }
 
     /**
+     * @return The {@link Configuration} instance associated with this WorkManager.
+     * @hide
+     */
+    @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+    @NonNull
+    public Configuration getConfiguration() {
+        return mConfiguration;
+    }
+
+    /**
      * @return The {@link Scheduler}s associated with this WorkManager based on the device's
      * capabilities, SDK version, etc.
      * @hide
@@ -187,7 +215,7 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
         // Initialized at construction time. So no need to synchronize.
         if (mSchedulers == null) {
             mSchedulers = Arrays.asList(
-                    Schedulers.createBestAvailableBackgroundScheduler(mContext),
+                    Schedulers.createBestAvailableBackgroundScheduler(mContext, this),
                     new GreedyScheduler(mContext, this));
         }
         return mSchedulers;
@@ -211,9 +239,18 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
         return mTaskExecutor;
     }
 
+    /**
+     * @return the {@link Preferences} used by the instance of {@link WorkManager}.
+     * @hide
+     */
+    @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
+    public @NonNull Preferences getPreferences() {
+        return mPreferences;
+    }
+
     @Override
-    public void enqueue(@NonNull List<? extends WorkRequest> baseWork) {
-        new WorkContinuationImpl(this, baseWork).enqueue();
+    public void enqueue(@NonNull List<? extends WorkRequest> workRequests) {
+        new WorkContinuationImpl(this, workRequests).enqueue();
     }
 
     @Override
@@ -238,6 +275,48 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
             @NonNull ExistingWorkPolicy existingWorkPolicy,
             @NonNull List<OneTimeWorkRequest> work) {
         return new WorkContinuationImpl(this, uniqueWorkName, existingWorkPolicy, work);
+    }
+
+    @Override
+    public void enqueueUniquePeriodicWork(
+            @NonNull String uniqueWorkName,
+            @NonNull ExistingPeriodicWorkPolicy existingPeriodicWorkPolicy,
+            @NonNull PeriodicWorkRequest periodicWork) {
+        createWorkContinuationForUniquePeriodicWork(
+                uniqueWorkName,
+                existingPeriodicWorkPolicy,
+                periodicWork)
+                .enqueue();
+    }
+
+    @Override
+    public void enqueueUniquePeriodicWorkSync(
+            @NonNull String uniqueWorkName,
+            @NonNull ExistingPeriodicWorkPolicy existingPeriodicWorkPolicy,
+            @NonNull PeriodicWorkRequest periodicWork) {
+        assertBackgroundThread("Cannot enqueueUniquePeriodicWorkSync on main thread!");
+        createWorkContinuationForUniquePeriodicWork(
+                uniqueWorkName,
+                existingPeriodicWorkPolicy,
+                periodicWork)
+                .enqueueSync();
+    }
+
+    private WorkContinuationImpl createWorkContinuationForUniquePeriodicWork(
+            @NonNull String uniqueWorkName,
+            @NonNull ExistingPeriodicWorkPolicy existingPeriodicWorkPolicy,
+            @NonNull PeriodicWorkRequest periodicWork) {
+        ExistingWorkPolicy existingWorkPolicy;
+        if (existingPeriodicWorkPolicy == ExistingPeriodicWorkPolicy.KEEP) {
+            existingWorkPolicy = ExistingWorkPolicy.KEEP;
+        } else {
+            existingWorkPolicy = ExistingWorkPolicy.REPLACE;
+        }
+        return new WorkContinuationImpl(
+                this,
+                uniqueWorkName,
+                existingWorkPolicy,
+                Collections.singletonList(periodicWork));
     }
 
     @Override
@@ -272,9 +351,44 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
     }
 
     @Override
+    @WorkerThread
     public void cancelUniqueWorkSync(@NonNull String uniqueWorkName) {
         assertBackgroundThread("Cannot cancelAllWorkByNameBlocking on main thread!");
         CancelWorkRunnable.forName(uniqueWorkName, this).run();
+    }
+
+    @Override
+    public void cancelAllWork() {
+        mTaskExecutor.executeOnBackgroundThread(CancelWorkRunnable.forAll(this));
+    }
+
+    @Override
+    @WorkerThread
+    public void cancelAllWorkSync() {
+        assertBackgroundThread("Cannot cancelAllWorkSync on main thread!");
+        CancelWorkRunnable.forAll(this).run();
+    }
+
+    @Override
+    public LiveData<Long> getLastCancelAllTimeMillis() {
+        return mPreferences.getLastCancelAllTimeMillisLiveData();
+    }
+
+    @Override
+    public long getLastCancelAllTimeMillisSync() {
+        return mPreferences.getLastCancelAllTimeMillis();
+    }
+
+    @Override
+    public void pruneWork() {
+        mTaskExecutor.executeOnBackgroundThread(new PruneWorkRunnable(this));
+    }
+
+    @Override
+    @WorkerThread
+    public void pruneWorkSync() {
+        assertBackgroundThread("Cannot pruneWork on main thread!");
+        new PruneWorkRunnable(this).run();
     }
 
     @Override
@@ -352,6 +466,13 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
         return LiveDataUtils.dedupedMappedLiveDataFor(inputLiveData, WorkSpec.WORK_STATUS_MAPPER);
     }
 
+    List<WorkStatus> getStatusesByIdSync(@NonNull List<String> workSpecIds) {
+        List<WorkSpec.WorkStatusPojo> workStatusPojos = mWorkDatabase.workSpecDao()
+                .getWorkStatusPojoForIds(workSpecIds);
+
+        return WorkSpec.WORK_STATUS_MAPPER.apply(workStatusPojos);
+    }
+
     /**
      * @param workSpecId The {@link WorkSpec} id to start
      * @hide
@@ -363,11 +484,11 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
 
     /**
      * @param workSpecId The {@link WorkSpec} id to start
-     * @param runtimeExtras The {@link RuntimeExtras} associated with this work
+     * @param runtimeExtras The {@link Extras.RuntimeExtras} associated with this work
      * @hide
      */
     @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-    public void startWork(String workSpecId, RuntimeExtras runtimeExtras) {
+    public void startWork(String workSpecId, Extras.RuntimeExtras runtimeExtras) {
         mTaskExecutor.executeOnBackgroundThread(
                 new StartWorkRunnable(this, workSpecId, runtimeExtras));
     }
@@ -395,7 +516,7 @@ public class WorkManagerImpl extends WorkManager implements SynchronousWorkManag
         // Delegate to the WorkManager's schedulers.
         // Using getters here so we can use from a mocked instance
         // of WorkManagerImpl.
-        Schedulers.schedule(getWorkDatabase(), getSchedulers());
+        Schedulers.schedule(getConfiguration(), getWorkDatabase(), getSchedulers());
     }
 
     private void assertBackgroundThread(String errorMessage) {
