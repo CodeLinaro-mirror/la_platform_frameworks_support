@@ -18,7 +18,9 @@ package androidx.work;
 
 import android.os.Build;
 import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -60,7 +62,6 @@ public final class OneTimeWorkRequest extends WorkRequest {
         return workList;
     }
 
-
     OneTimeWorkRequest(Builder builder) {
         super(builder.mId, builder.mWorkSpec, builder.mTags);
     }
@@ -84,6 +85,18 @@ public final class OneTimeWorkRequest extends WorkRequest {
          */
         public Builder setInitialDelay(long duration, @NonNull TimeUnit timeUnit) {
             mWorkSpec.initialDelay = timeUnit.toMillis(duration);
+            return this;
+        }
+
+        /**
+         * Add an initial delay to the {@link OneTimeWorkRequest}.
+         *
+         * @param duration The length of the delay
+         * @return The current {@link Builder}
+         */
+        @RequiresApi(26)
+        public Builder setInitialDelay(Duration duration) {
+            mWorkSpec.initialDelay = duration.toMillis();
             return this;
         }
 

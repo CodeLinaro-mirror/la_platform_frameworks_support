@@ -16,7 +16,7 @@
 
 package androidx.work.impl.model;
 
-import static android.arch.persistence.room.OnConflictStrategy.FAIL;
+import static android.arch.persistence.room.OnConflictStrategy.IGNORE;
 
 import android.arch.persistence.room.Dao;
 import android.arch.persistence.room.Insert;
@@ -35,7 +35,7 @@ public interface WorkTagDao {
      *
      * @param workTag The {@link WorkTag} to insert
      */
-    @Insert(onConflict = FAIL)
+    @Insert(onConflict = IGNORE)
     void insert(WorkTag workTag);
 
     /**
@@ -46,4 +46,13 @@ public interface WorkTagDao {
      */
     @Query("SELECT work_spec_id FROM worktag WHERE tag=:tag")
     List<String> getWorkSpecIdsWithTag(String tag);
+
+    /**
+     * Retrieves all tags for a given {@link WorkSpec} id.
+     *
+     * @param id The id of the {@link WorkSpec}
+     * @return A list of tags for that {@link WorkSpec}
+     */
+    @Query("SELECT DISTINCT tag FROM worktag WHERE work_spec_id=:id")
+    List<String> getTagsForWorkSpecId(String id);
 }

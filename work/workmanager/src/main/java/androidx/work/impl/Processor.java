@@ -20,6 +20,8 @@ import android.support.annotation.NonNull;
 import android.support.annotation.RestrictTo;
 import android.util.Log;
 
+import androidx.work.Configuration;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,8 +40,8 @@ public class Processor implements ExecutionListener {
     private static final String TAG = "Processor";
 
     private Context mAppContext;
+    private Configuration mConfiguration;
     private WorkDatabase mWorkDatabase;
-
     private Map<String, WorkerWrapper> mEnqueuedWorkMap;
     private List<Scheduler> mSchedulers;
     private Executor mExecutor;
@@ -50,10 +52,12 @@ public class Processor implements ExecutionListener {
 
     public Processor(
             Context appContext,
+            Configuration configuration,
             WorkDatabase workDatabase,
             List<Scheduler> schedulers,
             Executor executor) {
         mAppContext = appContext;
+        mConfiguration = configuration;
         mWorkDatabase = workDatabase;
         mEnqueuedWorkMap = new HashMap<>();
         mSchedulers = schedulers;
@@ -76,10 +80,10 @@ public class Processor implements ExecutionListener {
      * Starts a given unit of work in the background.
      *
      * @param id The work id to execute.
-     * @param runtimeExtras The {@link RuntimeExtras} for this work, if any.
+     * @param runtimeExtras The {@link Extras.RuntimeExtras} for this work, if any.
      * @return {@code true} if the work was successfully enqueued for processing
      */
-    public synchronized boolean startWork(String id, RuntimeExtras runtimeExtras) {
+    public synchronized boolean startWork(String id, Extras.RuntimeExtras runtimeExtras) {
         // Work may get triggered multiple times if they have passing constraints and new work with
         // those constraints are added.
         if (mEnqueuedWorkMap.containsKey(id)) {
@@ -87,11 +91,12 @@ public class Processor implements ExecutionListener {
             return false;
         }
 
-        WorkerWrapper workWrapper = new WorkerWrapper.Builder(mAppContext, mWorkDatabase, id)
-                .withListener(this)
-                .withSchedulers(mSchedulers)
-                .withRuntimeExtras(runtimeExtras)
-                .build();
+        WorkerWrapper workWrapper =
+                new WorkerWrapper.Builder(mAppContext, mConfiguration, mWorkDatabase, id)
+                        .withListener(this)
+                        .withSchedulers(mSchedulers)
+                        .withRuntimeExtras(runtimeExtras)
+                        .build();
         mEnqueuedWorkMap.put(id, workWrapper);
         mExecutor.execute(workWrapper);
         Log.d(TAG, String.format("%s: processing %s", getClass().getSimpleName(), id));
@@ -99,17 +104,17 @@ public class Processor implements ExecutionListener {
     }
 
     /**
-     * Tries to stop a unit of work.
+     * Stops a unit of work.
      *
      * @param id The work id to stop
      * @return {@code true} if the work was stopped successfully
      */
     public synchronized boolean stopWork(String id) {
-        Log.d(TAG, String.format("Processor cancelling %s", id));
+        Log.d(TAG, String.format("Processor stopping %s", id));
         WorkerWrapper wrapper = mEnqueuedWorkMap.remove(id);
         if (wrapper != null) {
-            wrapper.interrupt();
-            Log.d(TAG, String.format("WorkerWrapper interrupted for %s", id));
+            wrapper.interrupt(false);
+            Log.d(TAG, String.format("WorkerWrapper stopped for %s", id));
             return true;
         }
         Log.d(TAG, String.format("WorkerWrapper could not be found for %s", id));
@@ -117,13 +122,22 @@ public class Processor implements ExecutionListener {
     }
 
     /**
-     * Sets the given {@code id} as cancelled.  This does not actually stop any processing; call
-     * {@link #stopWork(String)} to do that.
+     * Stops a unit of work and marks it as cancelled.
      *
-     * @param id  The work id to mark as cancelled
+     * @param id The work id to stop and cancel
+     * @return {@code true} if the work was stopped successfully
      */
-    public synchronized void setCancelled(String id) {
+    public synchronized boolean stopAndCancelWork(String id) {
+        Log.d(TAG, String.format("Processor cancelling %s", id));
         mCancelledIds.add(id);
+        WorkerWrapper wrapper = mEnqueuedWorkMap.remove(id);
+        if (wrapper != null) {
+            wrapper.interrupt(true);
+            Log.d(TAG, String.format("WorkerWrapper cancelled for %s", id));
+            return true;
+        }
+        Log.d(TAG, String.format("WorkerWrapper could not be found for %s", id));
+        return false;
     }
 
     /**
