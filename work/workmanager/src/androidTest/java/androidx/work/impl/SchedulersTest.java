@@ -21,6 +21,7 @@ import static androidx.work.impl.utils.PackageManagerHelper.isComponentExplicitl
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.mockito.Mockito.mock;
 
 import android.content.Context;
 import android.os.Build;
@@ -43,16 +44,19 @@ import org.junit.runner.RunWith;
 public class SchedulersTest {
 
     private Context mAppContext;
+    private WorkManagerImpl mWorkManager;
 
     @Before
     public void setUp() {
+        mWorkManager = mock(WorkManagerImpl.class);
         mAppContext = InstrumentationRegistry.getTargetContext();
     }
 
     @Test
     @SdkSuppress(minSdkVersion = WorkManagerImpl.MIN_JOB_SCHEDULER_API_LEVEL)
     public void testGetBackgroundScheduler_withJobSchedulerApiLevel() {
-        Scheduler scheduler = Schedulers.createBestAvailableBackgroundScheduler(mAppContext);
+        Scheduler scheduler =
+                Schedulers.createBestAvailableBackgroundScheduler(mAppContext, mWorkManager);
         assertThat(scheduler, is(instanceOf(SystemJobScheduler.class)));
         assertServicesEnabled(true, false, false);
     }
@@ -60,7 +64,8 @@ public class SchedulersTest {
     @Test
     @SdkSuppress(maxSdkVersion = WorkManagerImpl.MAX_PRE_JOB_SCHEDULER_API_LEVEL)
     public void testGetBackgroundScheduler_beforeJobSchedulerApiLevel() {
-        Scheduler scheduler = Schedulers.createBestAvailableBackgroundScheduler(mAppContext);
+        Scheduler scheduler =
+                Schedulers.createBestAvailableBackgroundScheduler(mAppContext, mWorkManager);
         assertThat(scheduler, is(instanceOf(SystemAlarmScheduler.class)));
         assertServicesEnabled(false, false, true);
     }

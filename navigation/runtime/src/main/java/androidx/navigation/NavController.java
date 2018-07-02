@@ -32,6 +32,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -48,6 +49,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * from a remote server.)</p>
  */
 public class NavController {
+    private static final String KEY_NAVIGATOR_STATE =
+            "android-support-nav:controller:navigatorState";
+    private static final String KEY_NAVIGATOR_STATE_NAMES =
+            "android-support-nav:controller:navigatorState:names";
     private static final String KEY_GRAPH_ID = "android-support-nav:controller:graphId";
     private static final String KEY_BACK_STACK_IDS = "android-support-nav:controller:backStackIds";
     static final String KEY_DEEP_LINK_IDS = "android-support-nav:controller:deepLinkIds";
@@ -64,6 +69,7 @@ public class NavController {
     private NavInflater mInflater;
     private NavGraph mGraph;
     private int mGraphId;
+    private Bundle mNavigatorStateToRestore;
     private int[] mBackStackToRestore;
 
     private final Deque<NavDestination> mBackStack = new ArrayDeque<>();
@@ -88,30 +94,30 @@ public class NavController {
     private final Navigator.OnNavigatorNavigatedListener mOnNavigatedListener =
             new Navigator.OnNavigatorNavigatedListener() {
                 @Override
-                public void onNavigatorNavigated(Navigator navigator, @IdRes int destId,
+                public void onNavigatorNavigated(@NonNull Navigator navigator, @IdRes int destId,
                         @Navigator.BackStackEffect int backStackEffect) {
                     if (destId != 0) {
+                        // First remove popped destinations off the back stack
+                        if (backStackEffect == Navigator.BACK_STACK_DESTINATION_POPPED) {
+                            while (!mBackStack.isEmpty()
+                                    && mBackStack.peekLast().getId() != destId) {
+                                mBackStack.removeLast();
+                            }
+                        }
                         NavDestination newDest = findDestination(destId);
                         if (newDest == null) {
                             throw new IllegalArgumentException("Navigator " + navigator
                                     + " reported navigation to unknown destination id "
                                     + NavDestination.getDisplayName(mContext, destId));
                         }
-                        switch (backStackEffect) {
-                            case Navigator.BACK_STACK_DESTINATION_POPPED:
-                                while (!mBackStack.isEmpty()
-                                        && mBackStack.peekLast().getId() != destId) {
-                                    mBackStack.removeLast();
-                                }
-                                break;
-                            case Navigator.BACK_STACK_DESTINATION_ADDED:
-                                mBackStack.add(newDest);
-                                break;
-                            case Navigator.BACK_STACK_UNCHANGED:
-                                // Don't update the back stack and don't dispatchOnNavigated
-                                return;
+                        if (backStackEffect == Navigator.BACK_STACK_DESTINATION_ADDED) {
+                            // Add the new destination to the back stack
+                            mBackStack.add(newDest);
                         }
-                        dispatchOnNavigated(newDest);
+                        // Don't dispatchOnNavigated if nothing changed
+                        if (backStackEffect != Navigator.BACK_STACK_UNCHANGED) {
+                            dispatchOnNavigated(newDest);
+                        }
                     }
                 }
             };
@@ -319,7 +325,7 @@ public class NavController {
         }
     }
 
-    void dispatchOnNavigated(NavDestination destination) {
+    private void dispatchOnNavigated(NavDestination destination) {
         for (OnNavigatedListener listener : mOnNavigatedListeners) {
             listener.onNavigated(this, destination);
         }
@@ -335,14 +341,18 @@ public class NavController {
      *     <meta-data android:name="android.nav.graph" android:resource="@xml/my_nav_graph" />
      * </pre>
      *
-     * <p>The inflated graph can be retrieved via {@link #getGraph()}.</p>
+     * <p>The inflated graph can be retrieved via {@link #getGraph()}. Calling this will have no
+     * effect if there is no metadata graph specified.</p>
      *
      * @see NavInflater#METADATA_KEY_GRAPH
      * @see NavInflater#inflateMetadataGraph()
      * @see #getGraph
      */
     public void setMetadataGraph() {
-        setGraph(getNavInflater().inflateMetadataGraph());
+        NavGraph metadataGraph = getNavInflater().inflateMetadataGraph();
+        if (metadataGraph != null) {
+            setGraph(metadataGraph);
+        }
     }
 
     /**
@@ -393,6 +403,19 @@ public class NavController {
     }
 
     private void onGraphCreated() {
+        if (mNavigatorStateToRestore != null) {
+            ArrayList<String> navigatorNames = mNavigatorStateToRestore.getStringArrayList(
+                    KEY_NAVIGATOR_STATE_NAMES);
+            if (navigatorNames != null) {
+                for (String name : navigatorNames) {
+                    Navigator navigator = mNavigatorProvider.getNavigator(name);
+                    Bundle bundle = mNavigatorStateToRestore.getBundle(name);
+                    if (bundle != null) {
+                        navigator.onRestoreState(bundle);
+                    }
+                }
+            }
+        }
         if (mBackStackToRestore != null) {
             for (int destinationId : mBackStackToRestore) {
                 NavDestination node = findDestination(destinationId);
@@ -440,19 +463,20 @@ public class NavController {
         }
         Bundle extras = intent.getExtras();
         int[] deepLink = extras != null ? extras.getIntArray(KEY_DEEP_LINK_IDS) : null;
-        Bundle bundle = extras != null ? extras.getBundle(KEY_DEEP_LINK_EXTRAS) : null;
+        Bundle bundle = new Bundle();
+        Bundle deepLinkExtras = extras != null ? extras.getBundle(KEY_DEEP_LINK_EXTRAS) : null;
+        if (deepLinkExtras != null) {
+            bundle.putAll(deepLinkExtras);
+        }
         if ((deepLink == null || deepLink.length == 0) && intent.getData() != null) {
             Pair<NavDestination, Bundle> matchingDeepLink = mGraph.matchDeepLink(intent.getData());
             if (matchingDeepLink != null) {
                 deepLink = matchingDeepLink.first.buildDeepLinkIds();
-                bundle = matchingDeepLink.second;
+                bundle.putAll(matchingDeepLink.second);
             }
         }
         if (deepLink == null || deepLink.length == 0) {
             return false;
-        }
-        if (bundle == null) {
-            bundle = new Bundle();
         }
         bundle.putParcelable(KEY_DEEP_LINK_INTENT, intent);
         int flags = intent.getFlags();
@@ -475,10 +499,12 @@ public class NavController {
             // Start with a cleared task starting at our root when we're on our own task
             if (!mBackStack.isEmpty()) {
                 navigate(mGraph.getStartDestination(), bundle, new NavOptions.Builder()
-                        .setClearTask(true).setEnterAnim(0).setExitAnim(0).build());
+                        .setPopUpTo(mGraph.getId(), true)
+                        .setEnterAnim(0).setExitAnim(0).build());
             }
-            while (mBackStack.size() < deepLink.length) {
-                int destinationId = deepLink[mBackStack.size()];
+            int index = 0;
+            while (index < deepLink.length) {
+                int destinationId = deepLink[index++];
                 NavDestination node = findDestination(destinationId);
                 if (node == null) {
                     throw new IllegalStateException("unknown destination during deep link: "
@@ -504,7 +530,8 @@ public class NavController {
             } else {
                 // Navigate to the last NavDestination, clearing any existing destinations
                 node.navigate(bundle, new NavOptions.Builder()
-                        .setClearTask(true).setEnterAnim(0).setExitAnim(0).build());
+                        .setPopUpTo(mGraph.getId(), true)
+                        .setEnterAnim(0).setExitAnim(0).build());
             }
         }
         return true;
@@ -574,6 +601,7 @@ public class NavController {
      * @param args arguments to pass to the destination
      * @param navOptions special options for this navigation operation
      */
+    @SuppressWarnings("deprecation")
     public void navigate(@IdRes int resId, @Nullable Bundle args, @Nullable NavOptions navOptions) {
         NavDestination currentNode = mBackStack.isEmpty() ? mGraph : mBackStack.peekLast();
         if (currentNode == null) {
@@ -609,8 +637,7 @@ public class NavController {
         if (navOptions != null) {
             if (navOptions.shouldClearTask()) {
                 // Start with a clean slate
-                popBackStack(0, true);
-                mBackStack.clear();
+                popBackStack(mGraph.getId(), true);
             } else if (navOptions.getPopUpTo() != 0) {
                 popBackStack(navOptions.getPopUpTo(), navOptions.isPopUpToInclusive());
             }
@@ -661,6 +688,24 @@ public class NavController {
             b = new Bundle();
             b.putInt(KEY_GRAPH_ID, mGraphId);
         }
+        ArrayList<String> navigatorNames = new ArrayList<>();
+        Bundle navigatorState = new Bundle();
+        for (Map.Entry<String, Navigator<? extends NavDestination>> entry :
+                mNavigatorProvider.getNavigators().entrySet()) {
+            String name = entry.getKey();
+            Bundle savedState = entry.getValue().onSaveState();
+            if (savedState != null) {
+                navigatorNames.add(name);
+                navigatorState.putBundle(name, entry.getValue().onSaveState());
+            }
+        }
+        if (!navigatorNames.isEmpty()) {
+            if (b == null) {
+                b = new Bundle();
+            }
+            navigatorState.putStringArrayList(KEY_NAVIGATOR_STATE_NAMES, navigatorNames);
+            b.putBundle(KEY_NAVIGATOR_STATE, navigatorState);
+        }
         if (!mBackStack.isEmpty()) {
             if (b == null) {
                 b = new Bundle();
@@ -689,10 +734,11 @@ public class NavController {
         }
 
         mGraphId = navState.getInt(KEY_GRAPH_ID);
+        mNavigatorStateToRestore = navState.getBundle(KEY_NAVIGATOR_STATE);
         mBackStackToRestore = navState.getIntArray(KEY_BACK_STACK_IDS);
         if (mGraphId != 0) {
-            // Set the graph right away, onGraphCreated will re-add the back stack
-            // from mBackStackToRestore
+            // Set the graph right away, onGraphCreated will handle restoring the
+            // rest of the saved state
             setGraph(mGraphId);
         }
     }

@@ -82,10 +82,7 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
      * Changes are not saved back until requested.
      */
     fun applyRules(context: TransformationContext) {
-        if (context.rewritingSupportLib) {
-            rewriteOwnArtifactInfo(context)
-            hasChanged = true
-        }
+        tryRewriteOwnArtifactInfo(context)
 
         if (dependenciesGroup == null) {
             // Nothing to transform as this file has no dependencies section
@@ -94,7 +91,7 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
 
         val newDependencies = mutableSetOf<PomDependency>()
         for (dependency in dependencies) {
-            newDependencies.addAll(mapDependency(dependency, context))
+            newDependencies.add(mapDependency(dependency, context))
         }
 
         if (newDependencies.isEmpty()) {
@@ -117,7 +114,7 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
         return PomDependency(groupIdNode.text, artifactIdNode.text, version.text)
     }
 
-    private fun rewriteOwnArtifactInfo(context: TransformationContext) {
+    private fun tryRewriteOwnArtifactInfo(context: TransformationContext) {
         val groupIdNode = document.rootElement
                 .getChild("groupId", document.rootElement.namespace)
         val artifactIdNode = document.rootElement
@@ -130,27 +127,24 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
         }
 
         val dependency = PomDependency(groupIdNode.text, artifactIdNode.text, version.text)
-        val newDependency = mapDependency(dependency, context).first()
+        val newDependency = mapDependency(dependency, context)
 
         if (newDependency != dependency) {
             groupIdNode.text = newDependency.groupId
             artifactIdNode.text = newDependency.artifactId
             version.text = newDependency.version
+            hasChanged = true
         }
     }
 
     private fun mapDependency(
-            dependency: PomDependency,
-            context: TransformationContext
-    ): Set<PomDependency> {
-        if (dependency.shouldSkipRewrite()) {
-            return emptySet()
-        }
-
+        dependency: PomDependency,
+        context: TransformationContext
+    ): PomDependency {
         val rule = context.config.pomRewriteRules.firstOrNull { it.matches(dependency) }
         if (rule != null) {
             // Replace with new dependencies
-            return rule.to.map { it.rewrite(dependency, context.versionsMap) }.toSet()
+            return rule.to.rewrite(dependency, context.versions)
         }
 
         val matchesPrefix = context.config.restrictToPackagePrefixesWithDots.any {
@@ -165,7 +159,7 @@ class PomDocument(val file: ArchiveFile, private val document: Document) {
         }
 
         // No rule to rewrite => keep it
-        return setOf(dependency)
+        return dependency
     }
 
     /**

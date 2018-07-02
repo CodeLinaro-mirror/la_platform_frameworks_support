@@ -19,9 +19,6 @@ package com.android.tools.build.jetifier.processor.transform.pom
 import com.android.tools.build.jetifier.core.config.Config
 import com.android.tools.build.jetifier.core.pom.PomDependency
 import com.android.tools.build.jetifier.core.pom.PomRewriteRule
-import com.android.tools.build.jetifier.core.proguard.ProGuardTypesMap
-import com.android.tools.build.jetifier.core.rule.RewriteRulesMap
-import com.android.tools.build.jetifier.core.type.TypesMap
 import com.android.tools.build.jetifier.processor.FileMapping
 import com.android.tools.build.jetifier.processor.Processor
 import com.android.tools.build.jetifier.processor.archive.Archive
@@ -36,26 +33,20 @@ import java.io.File
 class PomRewriteInZipTest {
 
     companion object {
-        private val TEST_CONFIG = Config(
+        private val TEST_CONFIG = Config.fromOptional(
             restrictToPackagePrefixes = setOf("com/sample"),
-            rulesMap = RewriteRulesMap.EMPTY,
-            slRules = listOf(),
             pomRewriteRules = setOf(
                 PomRewriteRule(
                     from = PomDependency(
                         groupId = "old.group",
                         artifactId = "myOldArtifact",
                         version = "0.1.0"),
-                    to = setOf(
-                        PomDependency(
-                            groupId = "com.sample.my.group",
-                            artifactId = "myArtifact",
-                            version = "1.0.0"
-                        )
+                    to = PomDependency(
+                        groupId = "com.sample.my.group",
+                        artifactId = "myArtifact",
+                        version = "1.0.0"
                     )
-                )),
-            typesMap = TypesMap.EMPTY,
-            proGuardMap = ProGuardTypesMap.EMPTY
+            ))
         )
     }
 
@@ -93,7 +84,7 @@ class PomRewriteInZipTest {
         tempDir.delete()
     }
 
-    @Test fun rewritePomInZip_notRewritingSL_shouldNotRewrite() {
+    @Test fun rewritePomInZip_notRewritingSL_shouldStillRewrite() {
         val inputZipPath = "/pomRefactorTest/pomTest.zip"
 
         val processor = Processor.createProcessor(
@@ -116,13 +107,13 @@ class PomRewriteInZipTest {
 
         Truth.assertThat(returnedPom.fileName).isEqualTo("test.pom")
 
-        Truth.assertThat(content).contains("com.sample.my.group")
-        Truth.assertThat(content).contains("myArtifact")
-        Truth.assertThat(content).contains("1.0.0")
+        Truth.assertThat(content).doesNotContain("com.sample.my.group")
+        Truth.assertThat(content).doesNotContain("myArtifact")
+        Truth.assertThat(content).doesNotContain("1.0.0")
 
-        Truth.assertThat(content).doesNotContain("old.group")
-        Truth.assertThat(content).doesNotContain("myOldArtifact")
-        Truth.assertThat(content).doesNotContain("0.1.0")
+        Truth.assertThat(content).contains("old.group")
+        Truth.assertThat(content).contains("myOldArtifact")
+        Truth.assertThat(content).contains("0.1.0")
 
         tempDir.delete()
     }
