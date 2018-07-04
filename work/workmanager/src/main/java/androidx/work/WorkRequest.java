@@ -16,11 +16,13 @@
 package androidx.work;
 
 import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
 import android.support.annotation.RestrictTo;
 import android.support.annotation.VisibleForTesting;
 
 import androidx.work.impl.model.WorkSpec;
 
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -33,17 +35,17 @@ import java.util.concurrent.TimeUnit;
 public abstract class WorkRequest {
 
     /**
-     * {@see https://android.googlesource.com/platform/frameworks/base/+/oreo-release/core/java/android/app/job/JobInfo.java#77}
+     * The default initial backoff time (in milliseconds) for work that has to be retried.
      */
     public static final long DEFAULT_BACKOFF_DELAY_MILLIS = 30000L;
 
     /**
-     * {@see https://android.googlesource.com/platform/frameworks/base/+/oreo-release/core/java/android/app/job/JobInfo.java#82}
+     * The maximum backoff time (in milliseconds) for work that has to be retried.
      */
     public static final long MAX_BACKOFF_MILLIS = 5 * 60 * 60 * 1000; // 5 hours.
 
     /**
-     * {@see https://android.googlesource.com/platform/frameworks/base/+/oreo-release/core/java/android/app/job/JobInfo.java#119}
+     * The minimum backoff time for work (in milliseconds) that has to be retried.
      */
     public static final long MIN_BACKOFF_MILLIS = 10 * 1000; // 10 seconds.
 
@@ -51,6 +53,10 @@ public abstract class WorkRequest {
     private @NonNull WorkSpec mWorkSpec;
     private @NonNull Set<String> mTags;
 
+    /**
+     * @hide
+     */
+    @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
     protected WorkRequest(@NonNull UUID id, @NonNull WorkSpec workSpec, @NonNull Set<String> tags) {
         mId = id;
         mWorkSpec = workSpec;
@@ -115,6 +121,7 @@ public abstract class WorkRequest {
         public Builder(@NonNull Class<? extends Worker> workerClass) {
             mId = UUID.randomUUID();
             mWorkSpec = new WorkSpec(mId.toString(), workerClass.getName());
+            addTag(workerClass.getName());
         }
 
         /**
@@ -191,6 +198,26 @@ public abstract class WorkRequest {
          */
         public B keepResultsForAtLeast(long duration, @NonNull TimeUnit timeUnit) {
             mWorkSpec.minimumRetentionDuration = timeUnit.toMillis(duration);
+            return getThis();
+        }
+
+        /**
+         * Specifies that the results of this work should be kept for at least the specified amount
+         * of time.  After this time has elapsed, the results may be pruned at the discretion of
+         * WorkManager when there are no pending dependent jobs.
+         *
+         * When the results of a work are pruned, it becomes impossible to query for its
+         * {@link WorkStatus}.
+         *
+         * Specifying a long duration here may adversely affect performance in terms of app storage
+         * and database query time.
+         *
+         * @param duration The minimum duration of time to keep the results of this work
+         * @return The current {@link Builder}
+         */
+        @RequiresApi(26)
+        public B keepResultsForAtLeast(@NonNull Duration duration) {
+            mWorkSpec.minimumRetentionDuration = duration.toMillis();
             return getThis();
         }
 

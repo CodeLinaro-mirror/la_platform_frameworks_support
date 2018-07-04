@@ -27,7 +27,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.work.impl.ExecutionListener;
-import androidx.work.impl.RuntimeExtras;
+import androidx.work.impl.Extras;
 import androidx.work.impl.WorkManagerImpl;
 
 import java.util.HashMap;
@@ -88,14 +88,18 @@ public class SystemJobService extends JobService implements ExecutionListener {
             mJobParameters.put(workSpecId, params);
         }
 
-        RuntimeExtras runtimeExtras = null;
+        Extras.RuntimeExtras runtimeExtras = null;
         if (Build.VERSION.SDK_INT >= 24) {
+            runtimeExtras = new Extras.RuntimeExtras();
             if (params.getTriggeredContentUris() != null
                     || params.getTriggeredContentAuthorities() != null) {
-                runtimeExtras = new RuntimeExtras();
                 runtimeExtras.triggeredContentUris = params.getTriggeredContentUris();
                 runtimeExtras.triggeredContentAuthorities =
                         params.getTriggeredContentAuthorities();
+            }
+
+            if (Build.VERSION.SDK_INT >= 28) {
+                runtimeExtras.network = params.getNetwork();
             }
         }
 

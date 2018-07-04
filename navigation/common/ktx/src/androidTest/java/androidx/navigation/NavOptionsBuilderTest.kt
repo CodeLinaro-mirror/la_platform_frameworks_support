@@ -37,6 +37,7 @@ class NavOptionsTest {
                 navOptions.shouldLaunchSingleTop())
     }
 
+    @Suppress("DEPRECATION")
     @Test
     fun launchDocument() {
         val navOptions = navOptions {
@@ -46,6 +47,7 @@ class NavOptionsTest {
                 navOptions.shouldLaunchDocument())
     }
 
+    @Suppress("DEPRECATION")
     @Test
     fun clearTask() {
         val navOptions = navOptions {

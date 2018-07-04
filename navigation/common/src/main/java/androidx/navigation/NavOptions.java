@@ -131,7 +131,11 @@ public class NavOptions {
      * <p>
      * This functions similarly to how {@link android.content.Intent#FLAG_ACTIVITY_NEW_DOCUMENT}
      * works with activites.
+     * @deprecated As per the {@link android.content.Intent#FLAG_ACTIVITY_NEW_DOCUMENT}
+     * documentation, it is recommended to use {@link android.R.attr#documentLaunchMode} on an
+     * Activity you wish to launch as a new document.
      */
+    @Deprecated
     public boolean shouldLaunchDocument() {
         return (mLaunchMode & LAUNCH_DOCUMENT) != 0;
     }
@@ -141,7 +145,10 @@ public class NavOptions {
      * <p>
      * This functions similarly to how {@link android.content.Intent#FLAG_ACTIVITY_CLEAR_TASK}
      * works with activites.
+     * @deprecated This is synonymous with {@link #getPopUpTo()} with the root of the graph and
+     * using {@link #isPopUpToInclusive()}.
      */
+    @Deprecated
     public boolean shouldClearTask() {
         return (mLaunchMode & LAUNCH_CLEAR_TASK) != 0;
     }
@@ -275,7 +282,11 @@ public class NavOptions {
          * screen they will be taken to their home screen.</p>
          *
          * @param launchDocument true to launch a new document task
+         * @deprecated As per the {@link android.content.Intent#FLAG_ACTIVITY_NEW_DOCUMENT}
+         * documentation, it is recommended to use {@link android.R.attr#documentLaunchMode} on an
+         * Activity you wish to launch as a new document.
          */
+        @Deprecated
         @NonNull
         public Builder setLaunchDocument(boolean launchDocument) {
             if (launchDocument) {
@@ -293,7 +304,12 @@ public class NavOptions {
          *
          * @param clearTask
          * @return
+         * @deprecated Use {@link #setPopUpTo(int, boolean)} with the
+         * {@link NavDestination#getId() id} of the
+         * {@link androidx.navigation.NavController#getGraph() NavController's graph}
+         * and set inclusive to true.
          */
+        @Deprecated
         @NonNull
         public Builder setClearTask(boolean clearTask) {
             if (clearTask) {
@@ -329,6 +345,7 @@ public class NavOptions {
          * @return this Builder
          * @see NavOptions#getEnterAnim()
          */
+        @NonNull
         public Builder setEnterAnim(@AnimRes @AnimatorRes int enterAnim) {
             mEnterAnim = enterAnim;
             return this;
